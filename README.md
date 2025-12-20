@@ -1,19 +1,10 @@
-<h4 align="center">
-    <a href="#features">Features</a>
-    ·
-    <a href="#installation">Installation</a>
-    ·
-    <a href="#usage">Usage</a>
-    ·
-    <a href="#project-structure">Project Structure</a>
-    ·
-    <a href="#security">Security</a>
-</h4>
+[✨ Features](#features) · [⚡ Installation](#installation) · [🛠 Usage](#usage) · [🏗 Project Structure](#project-structure) · [🔒 Security](#security)
 
 **vault-cli** is local-first encrypted credential manager with vim-style TUI, built in Rust.
 
 ![image](https://github.com/user-attachments/assets/417c24fa-8e47-48ea-956b-8a700827deab)
 
+<a name="features"></a>
 ## ✨ Features
 
 - **Secure Storage:** Per-credential encryption with ChaCha20-Poly1305 AEAD
@@ -26,6 +17,7 @@
 - **Audit Trail:** HMAC-signed logs for tamper detection
 - **Auto-lock:** Automatically lock vault-cli after 5 minutes of inactivity
 
+<a name="installation"></a>
 ## ⚡ Installation
 
 ```bash
@@ -50,6 +42,7 @@ sudo install -m 755 target/release/vault-cli /usr/local/bin/vault-cli
 cargo install --path .   # ensure ~/.cargo/bin is in PATH
 ```
 
+<a name="usage"></a>
 ## 🚀 Usage
 
 ### Normal Mode
@@ -77,6 +70,7 @@ cargo install --path .   # ensure ~/.cargo/bin is in PATH
 - `:gen` - Generate password
 - `:help` - Show help
 
+<a name="security"></a>
 ## 🛡️ Security
 
 - ChaCha20-Poly1305 encryption
