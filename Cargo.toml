@@ -1,0 +1,55 @@
+[package]
+name = "vault-cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["Kimlong"]
+description = "A local-first encrypted credential manager with vim-style TUI"
+license = "MIT"
+repository = "https://github.com/kimlong/credlock"
+keywords = ["password", "credential", "manager", "tui", "encryption"]
+categories = ["command-line-utilities", "cryptography"]
+
+[dependencies]
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+
+# Crypto
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+hmac = "0.12"
+sha1 = "0.10"
+rand = "0.8"
+zeroize = { version = "1.8", features = ["derive"] }
+
+# TOTP
+totp-rs = { version = "5.6", features = ["otpauth"] }
+
+# Clipboard
+arboard = "3.4"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.10", features = ["v4"] }
+hex = "0.4"
+base64 = "0.22"
+dirs = "5.0"
+thiserror = "1.0"
+anyhow = "1.0"
+
+[dev-dependencies]
+tempfile = "3.12"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

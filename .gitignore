@@ -1,0 +1,35 @@
+# ======================
+# Rust / Cargo
+# ======================
+/target/
+**/*.rs.bk
+
+# Cargo.lock SHOULD be committed for applications
+# (do NOT ignore it)
+
+# ======================
+# OS junk
+# ======================
+.DS_Store
+Thumbs.db
+
+# ======================
+# Logs / temp
+# ======================
+*.log
+*.tmp
+*.bak
+
+# ======================
+# Environment / secrets
+# ======================
+.env
+.env.*
+!.env.example
+
+# ======================
+# Coverage / profiling
+# ======================
+coverage/
+*.profraw
+*.profdata

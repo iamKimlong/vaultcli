@@ -1,0 +1,278 @@
+//! Database Models
+//!
+//! Data structures for credentials, projects, and audit logs.
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+/// Credential type enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CredentialType {
+    Password,
+    ApiKey,
+    SshKey,
+    Certificate,
+    Totp,
+    Note,
+    Database,
+    Custom,
+}
+
+impl CredentialType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Password => "password",
+            Self::ApiKey => "api_key",
+            Self::SshKey => "ssh_key",
+            Self::Certificate => "certificate",
+            Self::Totp => "totp",
+            Self::Note => "note",
+            Self::Database => "database",
+            Self::Custom => "custom",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "password" => Self::Password,
+            "api_key" => Self::ApiKey,
+            "ssh_key" => Self::SshKey,
+            "certificate" => Self::Certificate,
+            "totp" => Self::Totp,
+            "note" => Self::Note,
+            "database" => Self::Database,
+            _ => Self::Custom,
+        }
+    }
+
+    pub fn icon(&self) -> &'static str {
+        match self {
+            Self::Password => "󰌋",
+            Self::ApiKey => "󰯄",
+            Self::SshKey => "󰣀",
+            Self::Certificate => "󰄤",
+            Self::Totp => "󰪥",
+            Self::Note => "󰎞",
+            Self::Database => "󰆼",
+            Self::Custom => "󰘓",
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Password => "Password",
+            Self::ApiKey => "API Key",
+            Self::SshKey => "SSH Key",
+            Self::Certificate => "Certificate",
+            Self::Totp => "TOTP",
+            Self::Note => "Note",
+            Self::Database => "Database",
+            Self::Custom => "Custom",
+        }
+    }
+}
+
+/// Credential model
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Credential {
+    pub id: String,
+    pub name: String,
+    pub credential_type: CredentialType,
+    pub project_id: String,
+    pub username: Option<String>,
+    pub encrypted_secret: String,
+    pub encrypted_notes: Option<String>,
+    pub url: Option<String>,
+    pub tags: Vec<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub accessed_at: Option<DateTime<Utc>>,
+}
+
+impl Credential {
+    /// Create a new credential with generated ID
+    pub fn new(
+        name: String,
+        credential_type: CredentialType,
+        project_id: String,
+        encrypted_secret: String,
+    ) -> Self {
+        let now = Utc::now();
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            credential_type,
+            project_id,
+            username: None,
+            encrypted_secret,
+            encrypted_notes: None,
+            url: None,
+            tags: Vec::new(),
+            created_at: now,
+            updated_at: now,
+            accessed_at: None,
+        }
+    }
+}
+
+/// Project model
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Project {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub color: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl Project {
+    /// Create a new project with generated ID
+    pub fn new(name: String, description: Option<String>) -> Self {
+        let now = Utc::now();
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            name,
+            description,
+            color: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// Create the default project
+    pub fn default_project() -> Self {
+        let now = Utc::now();
+        Self {
+            id: "default".to_string(),
+            name: "Default".to_string(),
+            description: Some("Default project".to_string()),
+            color: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+}
+
+/// Audit action types
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuditAction {
+    Create,
+    Read,
+    Update,
+    Delete,
+    Copy,
+    Export,
+    Import,
+    Unlock,
+    Lock,
+}
+
+impl AuditAction {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Create => "create",
+            Self::Read => "read",
+            Self::Update => "update",
+            Self::Delete => "delete",
+            Self::Copy => "copy",
+            Self::Export => "export",
+            Self::Import => "import",
+            Self::Unlock => "unlock",
+            Self::Lock => "lock",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "create" => Self::Create,
+            "read" => Self::Read,
+            "update" => Self::Update,
+            "delete" => Self::Delete,
+            "copy" => Self::Copy,
+            "export" => Self::Export,
+            "import" => Self::Import,
+            "unlock" => Self::Unlock,
+            "lock" => Self::Lock,
+            _ => Self::Read,
+        }
+    }
+}
+
+/// Audit log entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditLog {
+    pub id: i64,
+    pub timestamp: DateTime<Utc>,
+    pub action: AuditAction,
+    pub credential_id: Option<String>,
+    pub details: Option<String>,
+    pub hmac: String,
+}
+
+impl AuditLog {
+    /// Create a new audit log entry (ID assigned by database)
+    pub fn new(
+        action: AuditAction,
+        credential_id: Option<String>,
+        details: Option<String>,
+        hmac: String,
+    ) -> Self {
+        Self {
+            id: 0,
+            timestamp: Utc::now(),
+            action,
+            credential_id,
+            details,
+            hmac,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_credential_type_roundtrip() {
+        let types = [
+            CredentialType::Password,
+            CredentialType::ApiKey,
+            CredentialType::SshKey,
+            CredentialType::Certificate,
+            CredentialType::Totp,
+            CredentialType::Note,
+            CredentialType::Database,
+            CredentialType::Custom,
+        ];
+
+        for ct in types {
+            assert_eq!(CredentialType::from_str(ct.as_str()), ct);
+        }
+    }
+
+    #[test]
+    fn test_credential_new() {
+        let cred = Credential::new(
+            "Test".to_string(),
+            CredentialType::Password,
+            "default".to_string(),
+            "encrypted".to_string(),
+        );
+
+        assert!(!cred.id.is_empty());
+        assert_eq!(cred.name, "Test");
+        assert_eq!(cred.credential_type, CredentialType::Password);
+    }
+
+    #[test]
+    fn test_project_new() {
+        let project = Project::new("My Project".to_string(), Some("Description".to_string()));
+
+        assert!(!project.id.is_empty());
+        assert_ne!(project.id, "default");
+        assert_eq!(project.name, "My Project");
+    }
+}
