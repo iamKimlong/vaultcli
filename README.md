@@ -89,6 +89,12 @@ cargo run
 - HMAC-SHA256 audit signatures
 - Auto-lock after 5 minutes
 
+## 🐞 Known Bugs
+
+- Program exit on unlock (after auto-lock)
+- Clipboard does not auto-clear properly
+- Auto-lock sometimes lock earlier than set time (5 minutes)
+
 <a name="dependencies"></a>
 ## ⚙️ Dependencies
 
