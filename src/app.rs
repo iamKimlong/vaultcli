@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::Frame;
 
 use crate::crypto::totp::{self, TotpSecret};
@@ -210,6 +210,10 @@ impl App {
 
     /// Handle key event
     pub fn handle_key(&mut self, key: KeyEvent) -> Result<bool, Box<dyn std::error::Error>> {
+        if key.kind != KeyEventKind::Press {
+            return Ok(false);
+        }
+
         // Handle form input separately
         if self.view == View::Form && self.credential_form.is_some() {
             return self.handle_form_key(key);
