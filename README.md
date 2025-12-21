@@ -24,6 +24,8 @@
 <a name="installation"></a>
 ## ⚡ Installation
 
+Requires `rustc` to be installed on your system!
+
 ```bash
 git clone https://github.com/iamKimlong/vaultcli
 cd vaultcli
@@ -51,6 +53,8 @@ cargo install --path .   # ensure ~/.cargo/bin is in PATH
 # --------------------------------
 cargo run
 ```
+
+**📜 Note:** whenever you update the vault-cli, your credentials will remain unchanged unless you explicity delete them.
 
 <a name="usage"></a>
 ## 🚀 Usage
