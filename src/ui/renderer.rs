@@ -15,6 +15,7 @@ use super::components::{
     PasswordDialog, StatusLine,
 };
 use crate::input::InputMode;
+use crate::ui::components::popup::HelpState;
 
 /// Current view
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +38,7 @@ pub struct UiState<'a> {
     pub password_prompt: Option<PasswordPrompt<'a>>,
     pub project_name: Option<&'a str>,
     pub credential_form: Option<&'a CredentialForm>,
+    pub help_state: &'a HelpState,
 }
 
 pub struct PasswordPrompt<'a> {
@@ -122,7 +124,7 @@ impl Renderer {
         // Split into list and detail
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(area);
 
         // List on left
@@ -161,7 +163,7 @@ impl Renderer {
     fn render_overlays(frame: &mut Frame, area: Rect, state: &mut UiState) {
         // Help screen
         if state.mode == InputMode::Help {
-            frame.render_widget(HelpScreen, area);
+            frame.render_widget(HelpScreen::new(state.help_state), area);
             return;
         }
 

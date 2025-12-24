@@ -50,10 +50,10 @@ impl<'a> ConfirmDialog<'a> {
     }
 }
 
-impl<'a> Widget for ConfirmDialog<'a> {
+impl Widget for ConfirmDialog<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let popup_area = centered_rect_fixed(50, 7, area);
-        
+
         Clear.render(popup_area, buf);
 
         let block = Block::default()
@@ -65,17 +65,21 @@ impl<'a> Widget for ConfirmDialog<'a> {
         let inner = block.inner(popup_area);
         block.render(popup_area, buf);
 
-        // Message
         let msg = Paragraph::new(self.message)
             .style(Style::default().fg(Color::White))
             .wrap(Wrap { trim: true });
         msg.render(Rect::new(inner.x, inner.y, inner.width, 2), buf);
 
-        // Buttons hint
         let hint = Line::from(vec![
-            Span::styled("[y]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "[y]",
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" Yes  "),
-            Span::styled("[n]", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "[n]",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" No"),
         ]);
         buf.set_line(inner.x, inner.y + 3, &hint, inner.width);
@@ -115,10 +119,10 @@ impl<'a> MessagePopup<'a> {
     }
 }
 
-impl<'a> Widget for MessagePopup<'a> {
+impl Widget for MessagePopup<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let popup_area = centered_rect_fixed(60, 5, area);
-        
+
         Clear.render(popup_area, buf);
 
         let block = Block::default()
@@ -161,37 +165,32 @@ impl<'a> InputField<'a> {
     }
 }
 
-impl<'a> Widget for InputField<'a> {
+impl Widget for InputField<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // Label
-        buf.set_string(
-            area.x,
-            area.y,
-            self.label,
-            Style::default().fg(Color::Cyan),
-        );
+        buf.set_string(area.x, area.y, self.label, Style::default().fg(Color::Cyan));
 
-        // Input area
         let input_x = area.x;
         let input_y = area.y + 1;
         let input_width = area.width;
 
-        // Background
         for x in input_x..input_x + input_width {
             if let Some(cell) = buf.cell_mut((x, input_y)) {
                 cell.set_bg(Color::DarkGray);
             }
         }
 
-        // Value (masked or plain)
         let display_value: String = if self.masked {
             "*".repeat(self.value.len())
         } else {
             self.value.to_string()
         };
-        buf.set_string(input_x, input_y, &display_value, Style::default().fg(Color::White));
+        buf.set_string(
+            input_x,
+            input_y,
+            &display_value,
+            Style::default().fg(Color::White),
+        );
 
-        // Cursor
         let cursor_x = input_x + self.cursor as u16;
         if cursor_x < input_x + input_width {
             if let Some(cell) = buf.cell_mut((cursor_x, input_y)) {
@@ -227,11 +226,11 @@ impl<'a> PasswordDialog<'a> {
     }
 }
 
-impl<'a> Widget for PasswordDialog<'a> {
+impl Widget for PasswordDialog<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let height = if self.error.is_some() { 9 } else { 7 };
+        let height = if self.error.is_some() { 7 } else { 6 };
         let popup_area = centered_rect_fixed(50, height, area);
-        
+
         Clear.render(popup_area, buf);
 
         let block = Block::default()
@@ -243,136 +242,277 @@ impl<'a> Widget for PasswordDialog<'a> {
         let inner = block.inner(popup_area);
         block.render(popup_area, buf);
 
-        // Prompt
-        buf.set_string(inner.x, inner.y, self.prompt, Style::default().fg(Color::White));
+        buf.set_string(
+            inner.x,
+            inner.y,
+            self.prompt,
+            Style::default().fg(Color::White),
+        );
 
-        // Input field
-        let input_rect = Rect::new(inner.x, inner.y + 2, inner.width, 2);
+        let input_rect = Rect::new(inner.x, inner.y + 1, inner.width, 2);
         InputField::new("", self.value, self.cursor)
             .masked()
             .render(input_rect, buf);
 
-        // Error message
         if let Some(err) = self.error {
-            buf.set_string(
-                inner.x,
-                inner.y + 4,
-                err,
-                Style::default().fg(Color::Red),
-            );
+            buf.set_string(inner.x, inner.y + 3, err, Style::default().fg(Color::Red));
         }
     }
 }
 
-/// Help screen
-pub struct HelpScreen;
+const TWO_COLUMN_MIN_WIDTH: u16 = 80;
+const COLUMN_WIDTH: u16 = 38;
 
-impl Widget for HelpScreen {
+/// Scrollable help screen state
+#[derive(Default)]
+pub struct HelpState {
+    pub scroll: usize,
+}
+
+impl HelpState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn scroll_up(&mut self, amount: usize) {
+        self.scroll = self.scroll.saturating_sub(amount);
+    }
+
+    pub fn scroll_down(&mut self, amount: usize, max_scroll: usize) {
+        self.scroll = (self.scroll + amount).min(max_scroll);
+    }
+
+    pub fn home(&mut self) {
+        self.scroll = 0;
+    }
+
+    pub fn end(&mut self, max_scroll: usize) {
+        self.scroll = max_scroll;
+    }
+}
+
+/// Help screen widget
+pub struct HelpScreen<'a> {
+    state: &'a HelpState,
+}
+
+impl<'a> HelpScreen<'a> {
+    pub fn new(state: &'a HelpState) -> Self {
+        Self { state }
+    }
+
+    /// Calculate total content height for scrolling bounds
+    pub fn content_height() -> usize {
+        help_sections()
+            .iter()
+            .map(|(_, bindings)| 1 + bindings.len() + 1) // header + bindings + spacing
+            .sum::<usize>()
+            .saturating_sub(1) // no trailing space after last section
+    }
+
+    /// Calculate max scroll value given visible height
+    pub fn max_scroll(visible_height: u16) -> usize {
+        Self::content_height().saturating_sub(visible_height as usize)
+    }
+}
+
+impl Widget for HelpScreen<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let popup = centered_rect(80, 80, area);
-
+        let popup = centered_rect(65, 65, area);
         Clear.render(popup, buf);
 
-        let block = help_block();
-        let inner = block.inner(popup);
+        let block = Block::default()
+            .title(" Help ")
+            .title_bottom(Line::from(" j/k scroll • q close ").centered())
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+            .style(Style::default().bg(Color::Black));
 
+        let inner = block.inner(popup);
         block.render(popup, buf);
 
-        render_help(inner, buf);
+        let use_two_columns = inner.width >= TWO_COLUMN_MIN_WIDTH;
+
+        if use_two_columns {
+            render_two_columns(inner, buf, self.state.scroll);
+        } else {
+            render_single_column(inner, buf, self.state.scroll);
+        }
     }
 }
 
-fn help_block() -> Block<'static> {
-    Block::default()
-        .title(" Help ")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan))
-        .style(Style::default().bg(Color::Black))
+fn render_single_column(area: Rect, buf: &mut Buffer, scroll: usize) {
+    let sections = help_sections();
+    let lines = build_help_lines(&sections);
+
+    for (i, line) in lines.iter().enumerate().skip(scroll) {
+        let y = area.y + (i - scroll) as u16;
+        if y >= area.y + area.height {
+            break;
+        }
+        render_help_line(area.x, y, area.width, line, buf);
+    }
 }
 
-fn render_help(inner: Rect, buf: &mut Buffer) {
-    let mut y = inner.y;
-    let max_y = inner.y + inner.height;
+fn render_two_columns(area: Rect, buf: &mut Buffer, scroll: usize) {
+    let sections = help_sections();
+    let (left_sections, right_sections) = split_sections_for_columns(&sections);
 
-    for (section, bindings) in help_text() {
-        if y >= max_y {
+    let left_lines = build_help_lines(&left_sections);
+    let right_lines = build_help_lines(&right_sections);
+
+    let gap = 4u16;
+    let col_width = (area.width.saturating_sub(gap)) / 2;
+    let right_x = area.x + col_width + gap;
+
+    let max_lines = left_lines.len().max(right_lines.len());
+
+    for i in scroll..max_lines {
+        let y = area.y + (i - scroll) as u16;
+        if y >= area.y + area.height {
             break;
         }
 
-        y = render_section_header(inner.x, y, section, buf);
-        y = render_bindings(inner, y, max_y, bindings, buf);
-        y += 1;
-    }
-}
-
-fn render_section_header(x: u16, y: u16, title: &str, buf: &mut Buffer) -> u16 {
-    buf.set_string(
-        x,
-        y,
-        title,
-        Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
-    );
-    y + 1
-}
-
-fn render_bindings(
-    inner: Rect,
-    mut y: u16,
-    max_y: u16,
-    bindings: Vec<(&str, &str)>,
-    buf: &mut Buffer,
-) -> u16 {
-    for (key, desc) in bindings {
-        if y >= max_y {
-            break;
+        if let Some(line) = left_lines.get(i) {
+            render_help_line(area.x, y, col_width, line, buf);
         }
-
-        buf.set_string(inner.x + 2, y, key, Style::default().fg(Color::Cyan));
-        buf.set_string(inner.x + 14, y, desc, Style::default().fg(Color::Gray));
-        y += 1;
+        if let Some(line) = right_lines.get(i) {
+            render_help_line(right_x, y, col_width, line, buf);
+        }
     }
-    y
 }
 
-fn help_text() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
+enum HelpLine<'a> {
+    Header(&'a str),
+    Binding(&'a str, &'a str),
+    Empty,
+}
+
+fn build_help_lines<'a>(sections: &'a [(&'a str, Vec<(&'a str, &'a str)>)]) -> Vec<HelpLine<'a>> {
+    let mut lines = Vec::new();
+
+    for (i, (header, bindings)) in sections.iter().enumerate() {
+        lines.push(HelpLine::Header(header));
+        for (key, desc) in bindings {
+            lines.push(HelpLine::Binding(key, desc));
+        }
+        if i < sections.len() - 1 {
+            lines.push(HelpLine::Empty);
+        }
+    }
+
+    lines
+}
+
+fn render_help_line(x: u16, y: u16, width: u16, line: &HelpLine, buf: &mut Buffer) {
+    match line {
+        HelpLine::Header(title) => {
+            buf.set_string(
+                x,
+                y,
+                *title,
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            );
+        }
+        HelpLine::Binding(key, desc) => {
+            buf.set_string(x + 2, y, *key, Style::default().fg(Color::Cyan));
+            let desc_x = x + 14;
+            let desc_width = width.saturating_sub(14) as usize;
+            let truncated: String = desc.chars().take(desc_width).collect();
+            buf.set_string(desc_x, y, &truncated, Style::default().fg(Color::Gray));
+        }
+        HelpLine::Empty => {}
+    }
+}
+
+fn split_sections_for_columns<'a>(
+    sections: &'a [(&'a str, Vec<(&'a str, &'a str)>)],
+) -> (
+    Vec<(&'a str, Vec<(&'a str, &'a str)>)>,
+    Vec<(&'a str, Vec<(&'a str, &'a str)>)>,
+) {
+    let total_lines: usize = sections
+        .iter()
+        .map(|(_, b)| 1 + b.len() + 1)
+        .sum();
+    let target = total_lines / 2;
+
+    let mut left = Vec::new();
+    let mut right = Vec::new();
+    let mut current_lines = 0;
+
+    for section in sections {
+        let section_lines = 1 + section.1.len() + 1;
+        if current_lines < target {
+            left.push((section.0, section.1.clone()));
+        } else {
+            right.push((section.0, section.1.clone()));
+        }
+        current_lines += section_lines;
+    }
+
+    (left, right)
+}
+
+fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
     vec![
-        ("Navigation", vec![
-            ("j / ↓", "Move down"),
-            ("k / ↑", "Move up"),
-            ("gg", "Go to top"),
-            ("G", "Go to bottom"),
-            ("Ctrl-d", "Half page down"),
-            ("Ctrl-u", "Half page up"),
-        ]),
-        ("Actions", vec![
-            ("l / Enter", "View details"),
-            ("n", "New credential"),
-            ("e", "Edit credential"),
-            ("dd / x", "Delete credential"),
-        ]),
-        ("Clipboard", vec![
-            ("yy / c", "Copy password (needs to open details first)"),
-            ("u", "Copy username"),
-            ("t", "Copy TOTP code"),
-        ]),
-        ("View", vec![
-            ("s", "Toggle password visibility"),
-            ("f", "Filter credentials"),
-            ("/", "Search"),
-        ]),
-        ("Commands", vec![
-            (":", "Command mode"),
-            (":q", "Quit"),
-            (":new", "New credential"),
-            (":project", "New project"),
-            (":gen", "Generate password"),
-        ]),
-        ("Other", vec![
-            ("?", "Show this help"),
-            ("L", "Lock vault"),
-            ("q", "Quit"),
-        ]),
+        (
+            "Navigation",
+            vec![
+                ("j / ↓", "Move down"),
+                ("k / ↑", "Move up"),
+                ("gg", "Go to top"),
+                ("G", "Go to bottom"),
+                ("Ctrl-d", "Half page down"),
+                ("Ctrl-u", "Half page up"),
+            ],
+        ),
+        (
+            "Actions",
+            vec![
+                ("l / Enter", "View details"),
+                ("n", "New credential"),
+                ("e", "Edit credential"),
+                ("dd / x", "Delete credential"),
+            ],
+        ),
+        (
+            "Clipboard",
+            vec![
+                ("yy / c", "Copy password"),
+                ("u", "Copy username"),
+                ("t", "Copy TOTP code"),
+            ],
+        ),
+        (
+            "View",
+            vec![
+                ("s", "Toggle password"),
+                ("f", "Filter credentials"),
+                ("/", "Search"),
+            ],
+        ),
+        (
+            "Commands",
+            vec![
+                (":", "Command mode"),
+                (":q", "Quit"),
+                (":changepw", "Change master key"),
+                (":new", "New credential"),
+                (":project", "New project"),
+                (":gen", "Generate password"),
+            ],
+        ),
+        (
+            "Other",
+            vec![
+                ("?", "Show this help"),
+                ("Ctrl-p", "Change master key"),
+                ("L", "Lock vault"),
+                ("q", "Quit"),
+            ],
+        ),
     ]
 }
