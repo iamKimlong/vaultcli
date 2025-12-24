@@ -2,7 +2,7 @@
 //!
 //! Data structures for credentials, projects, and audit logs.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
 /// Credential type enum
@@ -85,9 +85,9 @@ pub struct Credential {
     pub encrypted_notes: Option<String>,
     pub url: Option<String>,
     pub tags: Vec<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub accessed_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Local>,
+    pub updated_at: DateTime<Local>,
+    pub accessed_at: Option<DateTime<Local>>,
 }
 
 impl Credential {
@@ -98,7 +98,7 @@ impl Credential {
         project_id: String,
         encrypted_secret: String,
     ) -> Self {
-        let now = Utc::now();
+        let now = Local::now();
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             name,
@@ -123,14 +123,14 @@ pub struct Project {
     pub name: String,
     pub description: Option<String>,
     pub color: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Local>,
+    pub updated_at: DateTime<Local>,
 }
 
 impl Project {
     /// Create a new project with generated ID
     pub fn new(name: String, description: Option<String>) -> Self {
-        let now = Utc::now();
+        let now = Local::now();
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             name,
@@ -143,7 +143,7 @@ impl Project {
 
     /// Create the default project
     pub fn default_project() -> Self {
-        let now = Utc::now();
+        let now = Local::now();
         Self {
             id: "default".to_string(),
             name: "Default".to_string(),
@@ -205,7 +205,7 @@ impl AuditAction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditLog {
     pub id: i64,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: DateTime<Local>,
     pub action: AuditAction,
     pub credential_id: Option<String>,
     pub details: Option<String>,
@@ -222,7 +222,7 @@ impl AuditLog {
     ) -> Self {
         Self {
             id: 0,
-            timestamp: Utc::now(),
+            timestamp: Local::now(),
             action,
             credential_id,
             details,

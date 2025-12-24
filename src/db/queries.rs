@@ -2,7 +2,7 @@
 //!
 //! Parameterized queries for CRUD operations on credentials and projects.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use rusqlite::{params, Connection, Row};
 
 use super::{
@@ -73,7 +73,7 @@ pub fn update_project(conn: &Connection, project: &Project) -> DbResult<()> {
             project.name,
             project.description,
             project.color,
-            Utc::now().to_rfc3339(),
+            Local::now().to_rfc3339(),
         ],
     )?;
 
@@ -271,7 +271,7 @@ pub fn update_credential(conn: &Connection, credential: &Credential) -> DbResult
             credential.encrypted_notes,
             credential.url,
             tags_json,
-            Utc::now().to_rfc3339(),
+            Local::now().to_rfc3339(),
         ],
     )?;
 
@@ -286,7 +286,7 @@ pub fn update_credential(conn: &Connection, credential: &Credential) -> DbResult
 pub fn touch_credential(conn: &Connection, id: &str) -> DbResult<()> {
     conn.execute(
         "UPDATE credentials SET accessed_at = ?2 WHERE id = ?1",
-        params![id, Utc::now().to_rfc3339()],
+        params![id, Local::now().to_rfc3339()],
     )?;
     Ok(())
 }
@@ -407,10 +407,10 @@ pub fn get_credential_audit_logs(conn: &Connection, credential_id: &str) -> DbRe
 // Helpers
 // ============================================================================
 
-fn parse_datetime(s: String) -> DateTime<Utc> {
+fn parse_datetime(s: String) -> DateTime<Local> {
     DateTime::parse_from_rfc3339(&s)
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(|_| Utc::now())
+        .map(|dt| dt.with_timezone(&Local))
+        .unwrap_or_else(|_| Local::now())
 }
 
 #[cfg(test)]

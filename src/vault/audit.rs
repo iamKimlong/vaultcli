@@ -20,7 +20,7 @@ pub fn log_action(
     credential_id: Option<&str>,
     details: Option<&str>,
 ) -> VaultResult<i64> {
-    let timestamp = chrono::Utc::now();
+    let timestamp = chrono::Local::now();
     
     // Build message to sign
     let message = format!(

@@ -5,7 +5,7 @@
 //! Credentials are encrypted with a Data Encryption Key (DEK), not the
 //! master key directly.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 
 use crate::crypto::{decrypt_string, encrypt_string, DataEncryptionKey, MasterKey};
 use crate::db::{self, AuditAction, Credential, CredentialType};
@@ -24,8 +24,8 @@ pub struct DecryptedCredential {
     pub notes: Option<String>,
     pub url: Option<String>,
     pub tags: Vec<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Local>,
+    pub updated_at: DateTime<Local>,
 }
 
 impl DecryptedCredential {
