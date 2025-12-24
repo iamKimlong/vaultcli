@@ -46,6 +46,7 @@ pub enum Action {
     Search(String),
     Filter(String),
     GeneratePassword,
+    ChangePassword,
     
     // Confirmation
     Confirm,
@@ -117,6 +118,7 @@ pub fn normal_mode_action(key: KeyEvent, pending: Option<char>) -> (Action, Opti
         (KeyCode::Char('q'), _, _) => (Action::Quit, None),
         (KeyCode::Char('Q'), _, _) => (Action::ForceQuit, None),
         (KeyCode::Char('r'), KeyModifiers::CONTROL, _) => (Action::Refresh, None),
+        (KeyCode::Char('p'), KeyModifiers::CONTROL, _) => (Action::ChangePassword, None),
         (KeyCode::Char('L'), _, _) => (Action::Lock, None),
 
         _ => (Action::None, None),
@@ -176,6 +178,7 @@ pub fn parse_command(cmd: &str) -> Action {
         "delete" | "del" => Action::Delete,
         "gen" | "generate" => Action::GeneratePassword,
         "help" | "h" => Action::ShowHelp,
+        "passwd" | "password" | "changepw" => Action::ChangePassword,
         "lock" => Action::Lock,
         "refresh" => Action::Refresh,
         _ => Action::None,

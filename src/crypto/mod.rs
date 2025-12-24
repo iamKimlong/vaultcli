@@ -2,6 +2,7 @@
 //!
 //! Provides secure encryption, key derivation, and password generation.
 
+pub mod dek;
 pub mod encryption;
 pub mod kdf;
 pub mod key_hierarchy;
@@ -35,7 +36,8 @@ pub enum CryptoError {
 pub type CryptoResult<T> = Result<T, CryptoError>;
 
 // Re-exports
-pub use encryption::{decrypt_string, encrypt_string};
+pub use dek::DataEncryptionKey;
+pub use encryption::{decrypt_bytes, decrypt_string, encrypt_bytes, encrypt_string};
 pub use kdf::{derive_master_key, verify_master_key, KdfParams, MasterKey};
 pub use key_hierarchy::{DerivedKey, KeyHierarchy};
 pub use password_gen::{generate_password, password_strength, strength_label, PasswordPolicy};
