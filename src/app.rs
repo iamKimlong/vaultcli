@@ -544,6 +544,9 @@ impl App {
                 self.mode_state.to_normal();
             }
 
+            Action::Clear => {
+                self.set_message("", MessageType::Info);
+            }
             Action::Quit => {
                 self.should_quit = true;
                 return Ok(true);

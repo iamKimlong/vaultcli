@@ -53,6 +53,7 @@ pub enum Action {
     Cancel,
 
     // Application
+    Clear,
     Quit,
     ForceQuit,
     Refresh,
@@ -88,6 +89,7 @@ pub fn normal_mode_action(key: KeyEvent, pending: Option<char>) -> (Action, Opti
         (KeyCode::PageUp, _, _) => (Action::PageUp, None),
 
         // Selection
+        (KeyCode::Char('l'), KeyModifiers::CONTROL, _) => (Action::Clear, None),
         (KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right, _, _) => (Action::Select, None),
         (KeyCode::Esc | KeyCode::Char('h') | KeyCode::Left, _, _) => (Action::Back, None),
 
@@ -169,6 +171,7 @@ pub fn parse_command(cmd: &str) -> Action {
     let _args = parts.get(1).copied();
 
     match command {
+        "cls" | "clear" => Action::Clear,
         "q" | "quit" => Action::Quit,
         "q!" | "quit!" => Action::ForceQuit,
         "w" | "write" => Action::None, // Auto-save, no action needed
