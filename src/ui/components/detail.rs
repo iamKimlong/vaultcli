@@ -46,7 +46,7 @@ impl<'a> Widget for DetailView<'a> {
         let block = Block::default()
             .title(format!(" {} ", self.detail.name))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan));
+            .border_style(Style::default().fg(Color::Magenta));
 
         let inner = block.inner(area);
         block.render(area, buf);

@@ -292,7 +292,7 @@ impl<'a> Widget for CredentialFormWidget<'a> {
         let block = Block::default()
             .title(self.title)
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
+            .border_style(Style::default().fg(Color::Magenta))
             .style(Style::default().bg(Color::Black));
 
         let inner = block.inner(form_area);
@@ -317,7 +317,7 @@ impl<'a> Widget for CredentialFormWidget<'a> {
             };
 
             let label_style = if is_active {
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::Gray)
             };
@@ -378,15 +378,15 @@ impl<'a> Widget for CredentialFormWidget<'a> {
         // Help text at bottom
         let help_y = inner.y + inner.height - 1;
         let help_text = Line::from(vec![
-            Span::styled("Tab", Style::default().fg(Color::Cyan)),
+            Span::styled("Tab", Style::default().fg(Color::Magenta)),
             Span::raw(" next  "),
-            Span::styled("Shift+Tab", Style::default().fg(Color::Cyan)),
+            Span::styled("Shift+Tab", Style::default().fg(Color::Magenta)),
             Span::raw(" prev  "),
-            Span::styled("Enter", Style::default().fg(Color::Cyan)),
+            Span::styled("Enter", Style::default().fg(Color::Magenta)),
             Span::raw(" save  "),
-            Span::styled("Esc", Style::default().fg(Color::Cyan)),
+            Span::styled("Esc", Style::default().fg(Color::Magenta)),
             Span::raw(" cancel  "),
-            Span::styled("Ctrl+S", Style::default().fg(Color::Cyan)),
+            Span::styled("Ctrl+S", Style::default().fg(Color::Magenta)),
             Span::raw(" show pwd"),
         ]);
         buf.set_line(inner.x, help_y, &help_text, inner.width);

@@ -98,7 +98,7 @@ impl<'a> MessagePopup<'a> {
         Self {
             title,
             message,
-            style: Style::default().fg(Color::Cyan),
+            style: Style::default().fg(Color::Magenta),
         }
     }
 
@@ -236,7 +236,7 @@ impl Widget for PasswordDialog<'_> {
         let block = Block::default()
             .title(self.title)
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
+            .border_style(Style::default().fg(Color::Magenta))
             .style(Style::default().bg(Color::Black));
 
         let inner = block.inner(popup_area);
@@ -322,10 +322,10 @@ impl Widget for HelpScreen<'_> {
         Clear.render(popup, buf);
 
         let block = Block::default()
-            .title(" Help ")
+            .title(" Help Page ")
             .title_bottom(Line::from(" j/k scroll • q close ").centered())
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
+            .border_style(Style::default().fg(Color::Magenta))
             .style(Style::default().bg(Color::Black));
 
         let inner = block.inner(popup);

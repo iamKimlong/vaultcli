@@ -113,7 +113,7 @@ impl Renderer {
             let block = Block::default()
                 .title(" Credentials ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan));
+                .border_style(Style::default().fg(Color::Magenta));
 
             let list = CredentialList::new(state.credentials).block(block);
             frame.render_stateful_widget(list, area, state.list_state);

@@ -90,11 +90,11 @@ impl<'a> Widget for StatusLine<'a> {
         let mode_style = match self.mode {
             InputMode::Normal => Style::default().fg(Color::Black).bg(Color::Blue),
             InputMode::Insert => Style::default().fg(Color::Black).bg(Color::Green),
-            InputMode::Command => Style::default().fg(Color::Black).bg(Color::Yellow),
-            InputMode::Search => Style::default().fg(Color::Black).bg(Color::Cyan),
-            InputMode::Filter => Style::default().fg(Color::Black).bg(Color::Magenta),
+            InputMode::Command => Style::default().fg(Color::Black).bg(Color::Red),
+            InputMode::Search => Style::default().fg(Color::Black).bg(Color::Magenta),
+            InputMode::Filter => Style::default().fg(Color::Black).bg(Color::Cyan),
             InputMode::Confirm => Style::default().fg(Color::Black).bg(Color::Red),
-            InputMode::Help => Style::default().fg(Color::Black).bg(Color::Gray),
+            InputMode::Help => Style::default().fg(Color::Black).bg(Color::Yellow),
         };
 
         let mode_text = format!(" {} ", self.mode.indicator());
@@ -185,7 +185,7 @@ impl<'a> Widget for HelpBar<'a> {
             if i > 0 {
                 spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
             }
-            spans.push(Span::styled(*key, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)));
+            spans.push(Span::styled(*key, Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)));
             spans.push(Span::styled(format!(" {}", desc), Style::default().fg(Color::Gray)));
         }
         let line = Line::from(spans);
