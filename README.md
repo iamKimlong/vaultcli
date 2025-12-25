@@ -4,7 +4,7 @@
 
 **vault-cli** is local-first encrypted credential manager with vim-style TUI, built in Rust.
 
-![image](https://github.com/user-attachments/assets/528264e5-4a23-4854-9b8d-ecd185d7818e)
+![image](https://github.com/user-attachments/assets/ddc328f0-61c5-40e2-9707-1b8beda5691e)
 
 <a name="features"></a>
 ## ✨ Features
