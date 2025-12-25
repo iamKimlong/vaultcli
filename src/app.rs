@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::Frame;
@@ -20,6 +21,8 @@ use crate::ui::components::popup::HelpState;
 use crate::vault::credential::DecryptedCredential;
 use crate::vault::manager::VaultState;
 use crate::vault::Vault;
+
+static CLIPBOARD_COPY_ID: AtomicU64 = AtomicU64::new(0);
 
 /// Application configuration
 pub struct AppConfig {
@@ -54,6 +57,7 @@ pub enum PendingAction {
 
 /// Main application state
 pub struct App {
+    pub config: AppConfig,
     pub vault: Vault,
     pub mode_state: ModeState,
     pub view: View,
@@ -78,6 +82,7 @@ impl App {
         
         Self {
             vault: Vault::new(vault_config),
+            config,
             mode_state: ModeState::new(),
             view: View::List,
             list_state: ListViewState::new(),
@@ -535,7 +540,7 @@ impl App {
             Action::GeneratePassword => {
                 let password = crate::crypto::generate_password(&crate::crypto::PasswordPolicy::default());
                 self.copy_to_clipboard(&password)?;
-                self.set_message(&format!("Generated: {} (copied)", password), MessageType::Success);
+                self.set_message(&format!("Generated: {} (copied for 30s)", password), MessageType::Success);
             }
 
             Action::Confirm => self.handle_confirm()?,
@@ -690,27 +695,81 @@ impl App {
     }
 
     fn copy_to_clipboard(&mut self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
-        use arboard::Clipboard;
-        
-        #[cfg(target_os = "linux")]
-        {
-            use arboard::SetExtLinux;
-            // Spawn a thread to handle clipboard on Linux
-            // This prevents blocking the main UI
-            let text = text.to_string();
-            std::thread::spawn(move || {
-                if let Ok(mut clipboard) = Clipboard::new() {
-                    let _ = clipboard.set().wait().text(&text);
+        let copy_id = CLIPBOARD_COPY_ID.fetch_add(1, Ordering::SeqCst) + 1;
+        let text = text.to_string();
+        let timeout = self.config.clipboard_timeout;
+
+        std::thread::spawn(move || {
+            #[cfg(target_os = "linux")]
+            {
+                use std::process::{Command, Stdio};
+                use std::io::Write;
+
+                let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
+
+                let set_ok = if is_wayland {
+                    Command::new("wl-copy")
+                        .stdin(Stdio::piped())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .ok()
+                        .and_then(|mut child| {
+                            child.stdin.take()?.write_all(text.as_bytes()).ok()
+                        })
+                        .is_some()
+                } else {
+                    Command::new("xclip")
+                        .args(["-selection", "clipboard"])
+                        .stdin(Stdio::piped())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .ok()
+                        .and_then(|mut child| {
+                            child.stdin.take()?.write_all(text.as_bytes()).ok()
+                        })
+                        .is_some()
+                };
+
+                if !set_ok {
+                    return;
                 }
-            });
-        }
-        
-        #[cfg(not(target_os = "linux"))]
-        {
-            let mut clipboard = Clipboard::new()?;
-            clipboard.set_text(text)?;
-        }
-        
+
+                std::thread::sleep(timeout);
+
+                if CLIPBOARD_COPY_ID.load(Ordering::SeqCst) == copy_id {
+                    if is_wayland {
+                        let _ = Command::new("wl-copy").arg("--clear").output();
+                    } else {
+                        let _ = Command::new("xclip")
+                            .args(["-selection", "clipboard"])
+                            .stdin(Stdio::piped())
+                            .output();
+                    }
+                }
+            }
+
+            #[cfg(not(target_os = "linux"))]
+            {
+                use arboard::Clipboard;
+
+                let Ok(mut clipboard) = Clipboard::new() else {
+                    return;
+                };
+
+                if clipboard.set_text(&text).is_err() {
+                    return;
+                }
+
+                std::thread::sleep(timeout);
+
+                if CLIPBOARD_COPY_ID.load(Ordering::SeqCst) == copy_id {
+                    let _ = clipboard.clear();
+                }
+            }
+        });
+
         Ok(())
     }
 
