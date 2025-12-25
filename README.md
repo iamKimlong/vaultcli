@@ -96,10 +96,6 @@ cargo run
 - HMAC-SHA256 audit signatures
 - Auto-lock after 5 minutes
 
-## 🐞 Known Bugs
-
-- Clipboard does not auto-clear (not implemented yet)
-
 <a name="dependencies"></a>
 ## ⚙️ Dependencies
 
