@@ -87,6 +87,7 @@ pub struct CredentialForm {
     pub editing_id: Option<String>,
     pub project_id: String,
     pub show_password: bool,
+    pub scroll_offset: usize,
 }
 
 impl Default for CredentialForm {
@@ -113,6 +114,7 @@ impl CredentialForm {
             editing_id: None,
             project_id: "default".to_string(),
             show_password: false,
+            scroll_offset: 0,
         }
     }
 
@@ -155,9 +157,18 @@ impl CredentialForm {
         &mut self.fields[self.active_field]
     }
 
+    fn ensure_visible(&mut self, visible_fields: usize) {
+        if self.active_field < self.scroll_offset {
+            self.scroll_offset = self.active_field;
+        } else if self.active_field >= self.scroll_offset + visible_fields {
+            self.scroll_offset = self.active_field - visible_fields + 1;
+        }
+    }
+
     pub fn next_field(&mut self) {
         self.active_field = (self.active_field + 1) % self.fields.len();
         self.cursor = self.fields[self.active_field].value.len();
+        self.ensure_visible(5);
     }
 
     pub fn prev_field(&mut self) {
@@ -167,6 +178,7 @@ impl CredentialForm {
             self.active_field -= 1;
         }
         self.cursor = self.fields[self.active_field].value.len();
+        self.ensure_visible(5);
     }
 
     pub fn insert_char(&mut self, c: char) {
@@ -197,17 +209,30 @@ impl CredentialForm {
         }
     }
 
-    pub fn cycle_type(&mut self) {
+    pub fn cycle_type(&mut self, forward: bool) {
         if self.fields[self.active_field].field_type == FieldType::Select {
-            self.credential_type = match self.credential_type {
-                CredentialType::Password => CredentialType::ApiKey,
-                CredentialType::ApiKey => CredentialType::SshKey,
-                CredentialType::SshKey => CredentialType::Certificate,
-                CredentialType::Certificate => CredentialType::Totp,
-                CredentialType::Totp => CredentialType::Note,
-                CredentialType::Note => CredentialType::Database,
-                CredentialType::Database => CredentialType::Custom,
-                CredentialType::Custom => CredentialType::Password,
+            self.credential_type = if forward {
+                match self.credential_type {
+                    CredentialType::Password => CredentialType::ApiKey,
+                    CredentialType::ApiKey => CredentialType::SshKey,
+                    CredentialType::SshKey => CredentialType::Certificate,
+                    CredentialType::Certificate => CredentialType::Totp,
+                    CredentialType::Totp => CredentialType::Note,
+                    CredentialType::Note => CredentialType::Database,
+                    CredentialType::Database => CredentialType::Custom,
+                    CredentialType::Custom => CredentialType::Password,
+                }
+            } else {
+                match self.credential_type {
+                    CredentialType::Password => CredentialType::Custom,
+                    CredentialType::ApiKey => CredentialType::Password,
+                    CredentialType::SshKey => CredentialType::ApiKey,
+                    CredentialType::Certificate => CredentialType::SshKey,
+                    CredentialType::Totp => CredentialType::Certificate,
+                    CredentialType::Note => CredentialType::Totp,
+                    CredentialType::Database => CredentialType::Note,
+                    CredentialType::Custom => CredentialType::Database,
+                }
             };
             self.fields[1].value = self.credential_type.display_name().to_string();
         }
@@ -299,11 +324,21 @@ impl<'a> Widget for CredentialFormWidget<'a> {
         block.render(form_area, buf);
 
         // Calculate field layout
-        let mut y = inner.y;
+        let has_up_indicator = self.form.scroll_offset > 0;
+        let mut y = if has_up_indicator { inner.y + 1 } else { inner.y };
         let label_width = 18u16;
+        let visible_height = inner.height.saturating_sub(2);
+        let max_visible_fields = (visible_height / 2) as usize;
 
-        for (i, field) in self.form.fields.iter().enumerate() {
-            if y >= inner.y + inner.height - 2 {
+        // Show scroll indicator at top if scrolled
+        if self.form.scroll_offset > 0 {
+            let indicator = "";
+            let x = inner.x + (inner.width.saturating_sub(indicator.len() as u16)) / 2;
+            buf.set_string(x, inner.y, indicator, Style::default().fg(Color::Magenta));
+        }
+
+        for (i, field) in self.form.fields.iter().enumerate().skip(self.form.scroll_offset) {
+            if i >= self.form.scroll_offset + max_visible_fields {
                 break;
             }
 
@@ -345,7 +380,7 @@ impl<'a> Widget for CredentialFormWidget<'a> {
             let display_value = if field.field_type == FieldType::Select {
                 // Show type with icon
                 let icon = self.form.credential_type.icon();
-                format!("{} {} [Space to change]", icon, field.value)
+                format!("{} {} [Space/Ctrl+Space]", icon, field.value)
             } else if field.masked && !self.form.show_password {
                 "*".repeat(field.value.len().min(value_width as usize))
             } else {
@@ -373,6 +408,13 @@ impl<'a> Widget for CredentialFormWidget<'a> {
             }
 
             y += 2; // Space between fields
+        }
+
+        // Show scroll indicator at bottom if more fields below
+        if self.form.scroll_offset + max_visible_fields < self.form.fields.len() {
+            let indicator = "";
+            let x = inner.x + (inner.width.saturating_sub(indicator.len() as u16)) / 2;
+            buf.set_string(x, inner.y + inner.height - 2, indicator, Style::default().fg(Color::Magenta));
         }
 
         // Help text at bottom

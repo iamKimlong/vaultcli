@@ -308,9 +308,13 @@ impl App {
             (KeyCode::Char('s'), KeyModifiers::CONTROL) => {
                 form.toggle_password_visibility();
             }
-            // Cycle type (for select fields)
-            (KeyCode::Char(' '), _) if form.active_field().field_type == crate::ui::components::form::FieldType::Select => {
-                form.cycle_type();
+            // Cycle forward type (for select fields)
+            (KeyCode::Char(' '), KeyModifiers::NONE) if form.active_field().field_type == crate::ui::components::form::FieldType::Select => {
+                form.cycle_type(true);
+            }
+            // Cycle backward type (for select fields)
+            (KeyCode::Char(' '), KeyModifiers::CONTROL) if form.active_field().field_type == crate::ui::components::form::FieldType::Select => {
+                form.cycle_type(false);
             }
             // Text input
             (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
