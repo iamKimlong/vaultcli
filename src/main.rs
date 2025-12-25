@@ -148,7 +148,7 @@ fn run_init(
                 return Ok(());
             }
             KeyCode::Enter => {
-                match handle_init_enter(&password, &mut confirm, &mut confirming, app) {
+                match handle_init_enter(&mut password, &mut confirm, &mut confirming, app) {
                     InitResult::Continue(err) => {
                         error = err;
                     }
@@ -168,24 +168,24 @@ enum InitResult {
 }
 
 fn handle_init_enter(
-    password: &PasswordField,
+    password: &mut PasswordField,
     confirm: &mut PasswordField,
     confirming: &mut bool,
     app: &mut App,
 ) -> InitResult {
     if !*confirming {
+        if password.value.len() < 8 {
+            return InitResult::Continue(Some("Password must be at least 8 characters".into()));
+        }
         *confirming = true;
         return InitResult::Continue(None);
     }
 
     if password.value != confirm.value {
+        password.clear();
         confirm.clear();
+        *confirming = false;
         return InitResult::Continue(Some("Passwords do not match".into()));
-    }
-
-    if password.value.len() < 8 {
-        confirm.clear();
-        return InitResult::Continue(Some("Password must be at least 8 characters".into()));
     }
 
     match app.initialize(&password.value) {
