@@ -342,6 +342,7 @@ impl App {
     /// Save the credential form (create or update)
     fn save_credential_form(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let form = self.credential_form.take().unwrap();
+        let return_to = form.previous_view.clone();
         
         let db = self.vault.db()?;
         let key = self.vault.dek()?;
@@ -382,8 +383,9 @@ impl App {
             self.set_message("Credential created", MessageType::Success);
         }
 
-        self.view = View::List;
+        self.view = return_to;
         self.refresh_data()?;
+        self.update_selected_detail()?;
 
         Ok(())
     }
@@ -485,7 +487,6 @@ impl App {
 
             Action::Select => {
                 self.view = View::Detail;
-                self.update_selected_detail()?;
             }
             Action::Back => {
                 if self.view == View::Detail {
@@ -527,6 +528,7 @@ impl App {
                         cred.tags.clone(),
                         cred.notes.as_ref().map(|s| s.expose_secret().to_string()),
                         cred.project_id.clone(),
+                        self.view.clone(),
                     );
                     self.credential_form = Some(form);
                     self.view = View::Form;
@@ -550,6 +552,7 @@ impl App {
                             decrypted.tags.clone(),
                             decrypted.notes.as_ref().map(|s| s.expose_secret().to_string()),
                             decrypted.project_id.clone(),
+                            self.view.clone(),
                         );
                         self.credential_form = Some(form);
                         self.view = View::Form;

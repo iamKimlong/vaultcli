@@ -11,6 +11,7 @@ use ratatui::{
 };
 
 use crate::db::models::CredentialType;
+use crate::ui::renderer::View;
 
 /// Form field definition
 #[derive(Debug, Clone)]
@@ -88,6 +89,7 @@ pub struct CredentialForm {
     pub project_id: String,
     pub show_password: bool,
     pub scroll_offset: usize,
+    pub previous_view: View,
 }
 
 impl Default for CredentialForm {
@@ -115,6 +117,7 @@ impl CredentialForm {
             project_id: "default".to_string(),
             show_password: false,
             scroll_offset: 0,
+            previous_view: View::List,
         }
     }
 
@@ -128,11 +131,13 @@ impl CredentialForm {
         tags: Vec<String>,
         notes: Option<String>,
         project_id: String,
+        previous_view: View,
     ) -> Self {
         let mut form = Self::new();
         form.editing_id = Some(id);
         form.credential_type = cred_type;
         form.project_id = project_id;
+        form.previous_view = previous_view;
 
         form.fields[0].value = name;
         form.fields[1].value = cred_type.display_name().to_string();
