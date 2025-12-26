@@ -485,6 +485,7 @@ impl App {
 
             Action::Select => {
                 self.view = View::Detail;
+                self.update_selected_detail()?;
             }
             Action::Back => {
                 if self.view == View::Detail {
