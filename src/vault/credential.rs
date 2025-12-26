@@ -87,46 +87,6 @@ pub fn create_credential(
     Ok(cred)
 }
 
-/// Create a new credential (legacy API using MasterKey - for backwards compatibility)
-#[deprecated(
-    since = "0.2.0",
-    note = "Use create_credential with DataEncryptionKey instead"
-)]
-pub fn create_credential_with_master_key(
-    conn: &rusqlite::Connection,
-    key: &MasterKey,
-    name: String,
-    credential_type: CredentialType,
-    project_id: String,
-    secret: &str,
-    username: Option<String>,
-    url: Option<String>,
-    tags: Vec<String>,
-    notes: Option<&str>,
-) -> VaultResult<Credential> {
-    // Encrypt secret
-    let encrypted_secret = encrypt_string(key.as_ref(), secret)
-        .map_err(|e| VaultError::CryptoError(e.to_string()))?;
-
-    // Encrypt notes if provided
-    let encrypted_notes = notes
-        .map(|n| encrypt_string(key.as_ref(), n))
-        .transpose()
-        .map_err(|e| VaultError::CryptoError(e.to_string()))?;
-
-    // Create credential
-    let mut cred = Credential::new(name, credential_type, project_id, encrypted_secret);
-    cred.username = username;
-    cred.url = url;
-    cred.tags = tags;
-    cred.encrypted_notes = encrypted_notes;
-
-    // Save to database
-    db::create_credential(conn, &cred)?;
-
-    Ok(cred)
-}
-
 /// Get a credential by ID
 pub fn get_credential(conn: &rusqlite::Connection, id: &str) -> VaultResult<Credential> {
     Ok(db::get_credential(conn, id)?)
@@ -177,37 +137,6 @@ pub fn update_credential(
     if let Some(notes) = new_notes {
         cred.encrypted_notes = Some(
             encrypt_string(dek.as_ref(), notes)
-                .map_err(|e| VaultError::CryptoError(e.to_string()))?,
-        );
-    }
-
-    db::update_credential(conn, cred)?;
-
-    Ok(())
-}
-
-/// Update a credential (legacy API using MasterKey - for backwards compatibility)
-#[deprecated(
-    since = "0.2.0",
-    note = "Use update_credential with DataEncryptionKey instead"
-)]
-pub fn update_credential_with_master_key(
-    conn: &rusqlite::Connection,
-    key: &MasterKey,
-    cred: &mut Credential,
-    new_secret: Option<&str>,
-    new_notes: Option<&str>,
-) -> VaultResult<()> {
-    // Re-encrypt secret if changed
-    if let Some(secret) = new_secret {
-        cred.encrypted_secret = encrypt_string(key.as_ref(), secret)
-            .map_err(|e| VaultError::CryptoError(e.to_string()))?;
-    }
-
-    // Re-encrypt notes if changed
-    if let Some(notes) = new_notes {
-        cred.encrypted_notes = Some(
-            encrypt_string(key.as_ref(), notes)
                 .map_err(|e| VaultError::CryptoError(e.to_string()))?,
         );
     }
