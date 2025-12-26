@@ -75,6 +75,7 @@ cargo run
 | `u` | Copy username |
 | `t` | Copy TOTP |
 | `s` | Toggle password visibility |
+| `Ctrl-p` | Change master key |
 | `/` | Search |
 | `:` | Command mode |
 | `?` | Help |
@@ -84,6 +85,7 @@ cargo run
 - `:q` - Quit
 - `:new` - New credential
 - `:project` - New project
+- `:changepw` - Change master key
 - `:gen` - Generate password
 - `:help` - Show help
 
