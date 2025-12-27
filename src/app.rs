@@ -14,6 +14,7 @@ use ratatui::Frame;
 
 use crate::crypto::totp::{self, TotpSecret};
 use crate::db::models::{Credential, CredentialType};
+use crate::db::AuditAction;
 use crate::input::keymap::{
     confirm_action, help_action, normal_mode_action, parse_command, text_input_action, Action,
 };
@@ -23,7 +24,7 @@ use crate::ui::renderer::{Renderer, UiState, View};
 use crate::ui::components::popup::HelpState;
 use crate::vault::credential::DecryptedCredential;
 use crate::vault::manager::VaultState;
-use crate::vault::Vault;
+use crate::vault::{audit, Vault};
 
 static CLIPBOARD_COPY_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -44,7 +45,7 @@ impl Default for AppConfig {
         Self {
             vault_path,
             auto_lock_timeout: Duration::from_secs(300),
-            clipboard_timeout: Duration::from_secs(30),
+            clipboard_timeout: Duration::from_secs(15),
         }
     }
 }
@@ -114,6 +115,7 @@ impl App {
     /// Initialize vault with password
     pub fn initialize(&mut self, password: &str) -> Result<(), Box<dyn std::error::Error>> {
         self.vault.initialize(password)?;
+        self.log_audit(AuditAction::Unlock, None, Some("vault initialized"))?;
         self.refresh_data()?;
         Ok(())
     }
@@ -121,6 +123,7 @@ impl App {
     /// Unlock vault with password
     pub fn unlock(&mut self, password: &str) -> Result<(), Box<dyn std::error::Error>> {
         self.vault.unlock(password)?;
+        self.log_audit(AuditAction::Unlock, None, None)?;
         self.refresh_data()?;
         self.update_selected_detail()?;
         Ok(())
@@ -128,11 +131,27 @@ impl App {
 
     /// Lock vault
     pub fn lock(&mut self) {
+        // Log before locking (need keys to compute HMAC)
+        let _ = self.log_audit(AuditAction::Lock, None, None);
         self.vault.lock();
         self.credentials.clear();
         self.credential_items.clear();
         self.selected_credential = None;
         self.selected_detail = None;
+    }
+
+    /// Log an audit action with HMAC
+    fn log_audit(
+        &self,
+        action: AuditAction,
+        credential_id: Option<&str>,
+        details: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let keys = self.vault.keys()?;
+        let audit_key = keys.derive_audit_key()?;
+        let db = self.vault.db()?;
+        audit::log_action(db.conn(), &audit_key, action, credential_id, details)?;
+        Ok(())
     }
 
     /// Refresh data from vault
@@ -236,7 +255,7 @@ impl App {
                         return Ok(false);
                     }
                     KeyCode::Char('j') | KeyCode::Down => {
-                        let max = crate::ui::components::popup::HelpScreen::max_scroll(20); // visible height estimate
+                        let max = crate::ui::components::popup::HelpScreen::max_scroll(20);
                         self.help_state.scroll_down(1, max);
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
@@ -349,10 +368,11 @@ impl App {
                 form.get_notes().as_deref(),
             )?;
 
+            self.log_audit(AuditAction::Update, Some(id), None)?;
             self.set_message("Credential updated", MessageType::Success);
         } else {
             // Create new credential
-            crate::vault::credential::create_credential(
+            let cred = crate::vault::credential::create_credential(
                 db.conn(),
                 key,
                 form.get_name().to_string(),
@@ -364,6 +384,7 @@ impl App {
                 form.get_notes().as_deref(),
             )?;
 
+            self.log_audit(AuditAction::Create, Some(&cred.id), None)?;
             self.set_message("Credential created", MessageType::Success);
         }
 
@@ -458,7 +479,7 @@ impl App {
                 self.update_selected_detail()?;
             }
             Action::ShowHelp => {
-                self.help_state.home(); // Reset scroll position
+                self.help_state.home();
                 self.mode_state.to_help();
             }
             Action::ChangePassword => {
@@ -470,6 +491,9 @@ impl App {
             }
 
             Action::Select => {
+                if let Some(cred) = &self.selected_credential {
+                    self.log_audit(AuditAction::Read, Some(&cred.id), None)?;
+                }
                 self.view = View::Detail;
             }
             Action::Back => {
@@ -480,7 +504,7 @@ impl App {
 
             Action::CopyPassword => self.copy_secret()?,
             Action::CopyUsername => self.copy_username()?,
-            Action::CopyTotp => self.show_totp()?,
+            Action::CopyTotp => self.copy_totp()?,
             Action::TogglePasswordVisibility => {
                 self.password_visible = !self.password_visible;
                 self.update_selected_detail()?;
@@ -545,7 +569,6 @@ impl App {
             Action::EnterCommand => self.mode_state.to_command(),
             Action::EnterSearch => self.mode_state.to_search(),
             Action::EnterFilter => self.mode_state.to_filter(),
-            Action::ShowHelp => self.mode_state.to_help(),
 
             Action::ExecuteCommand(cmd) => {
                 let parsed = parse_command(&cmd);
@@ -557,7 +580,7 @@ impl App {
             Action::GeneratePassword => {
                 let password = crate::crypto::generate_password(&crate::crypto::PasswordPolicy::default());
                 self.copy_to_clipboard(&password)?;
-                self.set_message(&format!("Generated: {} (copied for 30s)", password), MessageType::Success);
+                self.set_message(&format!("Generated: {} (copied for {}s)", password, self.config.clipboard_timeout.as_secs()), MessageType::Success);
             }
 
             Action::Confirm => self.handle_confirm()?,
@@ -585,8 +608,8 @@ impl App {
         Ok(false)
     }
 
-    /// Decrypt credential and store in self.selected_detail and self.selected_credential.
-    /// Previous values are dropped and zeroized via SecretString on each call.
+    /// Decrypt credential and store in self.selected_detail and self.selected_credential
+    /// Previous values are dropped and zeroized via SecretString on each call
     fn update_selected_detail(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let Some(idx) = self.list_state.selected() else {
             self.selected_detail = None;
@@ -668,41 +691,60 @@ impl App {
     }
 
     fn copy_secret(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let secret = self.selected_credential.as_ref().and_then(|c| c.secret.clone());
-        if let Some(secret) = secret {
-            self.copy_to_clipboard(&secret.expose_secret())?;
-            self.set_message("Password copied (30s)", MessageType::Success);
-        }
+        let (secret, cred_id) = match &self.selected_credential {
+            Some(cred) => match &cred.secret {
+                Some(s) => (s.expose_secret().to_string(), cred.id.clone()),
+                None => return Ok(()),
+            },
+            None => return Ok(()),
+        };
+
+        self.copy_to_clipboard(&secret)?;
+        self.log_audit(AuditAction::Copy, Some(&cred_id), Some("secret"))?;
+        self.set_message(&format!("Password copied ({}s)", self.config.clipboard_timeout.as_secs()), MessageType::Success);
         Ok(())
     }
 
     fn copy_username(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let username = self.selected_credential.as_ref().and_then(|c| c.username.clone());
-        if let Some(username) = username {
-            self.copy_to_clipboard(&username)?;
-            self.set_message("Username copied", MessageType::Success);
-        }
+        let (username, cred_id) = match &self.selected_credential {
+            Some(cred) => match &cred.username {
+                Some(u) => (u.clone(), cred.id.clone()),
+                None => return Ok(()),
+            },
+            None => return Ok(()),
+        };
+
+        self.copy_to_clipboard(&username)?;
+        self.log_audit(AuditAction::Copy, Some(&cred_id), Some("username"))?;
+        self.set_message("Username copied", MessageType::Success);
         Ok(())
     }
 
-    fn show_totp(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(ref cred) = self.selected_credential {
-            if cred.credential_type == CredentialType::Totp {
-                if let Some(ref secret_str) = cred.secret {
-                    let totp_secret = serde_json::from_str::<TotpSecret>(secret_str.expose_secret())
-                        .unwrap_or_else(|_| TotpSecret::new(
-                            secret_str.expose_secret().to_string(),
-                            cred.name.clone(),
-                            "Vault-CLI".to_string(),
-                        ));
-                    
-                    let code = totp::generate_totp(&totp_secret)?;
-                    let remaining = totp::time_remaining(&totp_secret);
-                    self.set_message(&format!("TOTP: {} ({}s)", code, remaining), MessageType::Success);
-                    self.copy_to_clipboard(&code)?;
+    fn copy_totp(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Extract what we need before borrowing self mutably
+        let (totp_secret, cred_id) = match &self.selected_credential {
+            Some(cred) if cred.credential_type == CredentialType::Totp => {
+                match &cred.secret {
+                    Some(secret_str) => {
+                        let secret = serde_json::from_str::<TotpSecret>(secret_str.expose_secret())
+                            .unwrap_or_else(|_| TotpSecret::new(
+                                secret_str.expose_secret().to_string(),
+                                cred.name.clone(),
+                                "Vault-CLI".to_string(),
+                            ));
+                        (secret, cred.id.clone())
+                    }
+                    None => return Ok(()),
                 }
             }
-        }
+            _ => return Ok(()),
+        };
+
+        let code = totp::generate_totp(&totp_secret)?;
+        let remaining = totp::time_remaining(&totp_secret);
+        self.copy_to_clipboard(&code)?;
+        self.log_audit(AuditAction::Copy, Some(&cred_id), Some("totp"))?;
+        self.set_message(&format!("TOTP: {} ({}s remaining)", code, remaining), MessageType::Success);
         Ok(())
     }
 
@@ -750,7 +792,7 @@ impl App {
 
                 std::thread::sleep(timeout);
 
-                // Zeroize the local copy before thread exits
+                // Zeroize local copy before thread exits
                 text.zeroize();
 
                 if CLIPBOARD_COPY_ID.load(Ordering::SeqCst) == copy_id {
@@ -794,6 +836,7 @@ impl App {
                 PendingAction::DeleteCredential(id) => {
                     let db = self.vault.db()?;
                     crate::db::delete_credential(db.conn(), &id)?;
+                    self.log_audit(AuditAction::Delete, Some(&id), None)?;
                     self.refresh_data()?;
                     self.set_message("Credential deleted", MessageType::Success);
                 }

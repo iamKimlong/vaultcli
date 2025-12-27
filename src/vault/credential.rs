@@ -9,7 +9,7 @@ use chrono::{DateTime, Local};
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::crypto::{decrypt_string, encrypt_string, DataEncryptionKey};
-use crate::db::{self, AuditAction, Credential, CredentialType};
+use crate::db::{self, Credential, CredentialType};
 
 use super::{VaultError, VaultResult};
 
@@ -154,23 +154,6 @@ pub fn delete_credential(conn: &rusqlite::Connection, id: &str) -> VaultResult<(
 /// List all credentials
 pub fn list_credentials(conn: &rusqlite::Connection) -> VaultResult<Vec<Credential>> {
     Ok(db::get_all_credentials(conn)?)
-}
-
-/// Log credential access
-pub fn log_credential_access(
-    conn: &rusqlite::Connection,
-    credential_id: &str,
-    action: AuditAction,
-    hmac: Option<&str>,
-) -> VaultResult<()> {
-    let log = db::AuditLog::new(
-        action,
-        Some(credential_id.to_string()),
-        None,
-        hmac.unwrap_or("").to_string(),
-    );
-    db::create_audit_log(conn, &log)?;
-    Ok(())
 }
 
 #[cfg(test)]
