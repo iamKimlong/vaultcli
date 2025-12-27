@@ -123,10 +123,32 @@ impl App {
     /// Unlock vault with password
     pub fn unlock(&mut self, password: &str) -> Result<(), Box<dyn std::error::Error>> {
         self.vault.unlock(password)?;
+
+        // Verify audit log integrity
+        match self.verify_audit_logs() {
+            Ok((0, total)) if total > 0 => {
+                // All logs valid, no message needed
+            }
+            Ok((tampered, total)) if tampered > 0 => {
+                self.set_message(
+                    &format!("Warning: {} of {} audit logs may be tampered", tampered, total),
+                    MessageType::Error,
+                );
+            }
+            _ => {}
+        }
         self.log_audit(AuditAction::Unlock, None, None)?;
         self.refresh_data()?;
         self.update_selected_detail()?;
         Ok(())
+    }
+
+    /// Clear credentials in memory
+    pub fn clear_credential(&mut self) {
+        self.credentials.clear();
+        self.credential_items.clear();
+        self.selected_credential = None;
+        self.selected_detail = None;
     }
 
     /// Lock vault
@@ -134,10 +156,7 @@ impl App {
         // Log before locking (need keys to compute HMAC)
         let _ = self.log_audit(AuditAction::Lock, None, None);
         self.vault.lock();
-        self.credentials.clear();
-        self.credential_items.clear();
-        self.selected_credential = None;
-        self.selected_detail = None;
+        self.clear_credential();
     }
 
     /// Log an audit action with HMAC
@@ -152,6 +171,17 @@ impl App {
         let db = self.vault.db()?;
         audit::log_action(db.conn(), &audit_key, action, credential_id, details)?;
         Ok(())
+    }
+
+    /// Verify all audit logs and return count of tampered entries
+    fn verify_audit_logs(&self) -> Result<(usize, usize), Box<dyn std::error::Error>> {
+        let keys = self.vault.keys()?;
+        let audit_key = keys.derive_audit_key()?;
+        let db = self.vault.db()?;
+        let results = audit::verify_all_logs(db.conn(), &audit_key)?;
+        let total = results.len();
+        let tampered = results.iter().filter(|(_, valid)| !valid).count();
+        Ok((tampered, total))
     }
 
     /// Refresh data from vault
@@ -500,6 +530,7 @@ impl App {
                 if self.view == View::Detail {
                     self.view = View::List;
                 }
+                self.clear_credential();
             }
 
             Action::CopyPassword => self.copy_secret()?,
@@ -601,6 +632,28 @@ impl App {
             }
             Action::Lock => self.lock(),
             Action::Refresh => self.refresh_data()?,
+            Action::VerifyAudit => {
+                match self.verify_audit_logs() {
+                    Ok((0, total)) => {
+                        self.set_message(
+                            &format!("Audit OK: {} logs verified", total),
+                            MessageType::Success,
+                        );
+                    }
+                    Ok((tampered, total)) => {
+                        self.set_message(
+                            &format!("Warning: {} of {} logs may be tampered!", tampered, total),
+                            MessageType::Error,
+                        );
+                    }
+                    Err(e) => {
+                        self.set_message(&format!("Audit check failed: {}", e), MessageType::Error);
+                    }
+                }
+            }
+            Action::Invalid(cmd) => {
+                self.set_message(&format!("Unknown command: {}", cmd), MessageType::Error);
+            }
 
             _ => {}
         }
