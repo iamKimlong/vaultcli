@@ -269,12 +269,13 @@ impl App {
     /// Handle key events in form mode
     fn handle_form_key(&mut self, key: KeyEvent) -> Result<bool, Box<dyn std::error::Error>> {
         let form = self.credential_form.as_mut().unwrap();
+        let return_to = form.previous_view.clone();
 
         match (key.code, key.modifiers) {
             // Cancel form
             (KeyCode::Esc, _) => {
                 self.credential_form = None;
-                self.view = View::List;
+                self.view = return_to;
             }
             // Submit form
             (KeyCode::Enter, KeyModifiers::NONE) => {
