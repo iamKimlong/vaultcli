@@ -19,7 +19,7 @@ use crate::input::keymap::{
     confirm_action, help_action, normal_mode_action, parse_command, text_input_action, Action,
 };
 use crate::input::modes::{InputMode, ModeState};
-use crate::ui::components::{CredentialDetail, CredentialForm, CredentialItem, ListViewState, MessageType};
+use crate::ui::components::{CredentialDetail, CredentialForm, CredentialItem, ListViewState, LogsState, MessageType};
 use crate::ui::renderer::{Renderer, UiState, View};
 use crate::ui::components::popup::HelpState;
 use crate::vault::credential::DecryptedCredential;
@@ -76,6 +76,7 @@ pub struct App {
     pub credential_form: Option<CredentialForm>,
     pub wants_password_change: bool,
     pub help_state: HelpState,
+    pub logs_state: LogsState,
 }
 
 impl App {
@@ -99,6 +100,7 @@ impl App {
             credential_form: None,
             wants_password_change: false,
             help_state: HelpState::new(),
+            logs_state: LogsState::new(),
         }
     }
 
@@ -184,6 +186,19 @@ impl App {
         Ok((tampered, total))
     }
 
+    /// Load audit logs into logs_state
+    fn load_audit_logs(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let keys = self.vault.keys()?;
+        let audit_key = keys.derive_audit_key()?;
+        let db = self.vault.db()?;
+        
+        // Get recent logs (most recent first is default from DB)
+        let logs = crate::vault::audit::get_recent_logs(db.conn(), 500)?;
+        self.logs_state.set_logs(logs);
+        
+        Ok(())
+    }
+
     /// Refresh data from vault
     pub fn refresh_data(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let db = self.vault.db()?;
@@ -239,6 +254,7 @@ impl App {
             password_prompt: None,
             credential_form: self.credential_form.as_ref(),
             help_state: &self.help_state,
+            logs_state: &self.logs_state,
         };
 
         Renderer::render(frame, &mut state);
@@ -304,6 +320,37 @@ impl App {
                     }
                     KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         self.help_state.scroll_up(10);
+                    }
+                    _ => {}
+                }
+                return Ok(false);
+            }
+            InputMode::Logs => {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Char('i') | KeyCode::Esc => {
+                        self.mode_state.to_normal();
+                        return Ok(false);
+                    }
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        let max = self.logs_state.max_scroll(20);
+                        self.logs_state.scroll_down(1, max);
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        self.logs_state.scroll_up(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.logs_state.home();
+                    }
+                    KeyCode::Char('G') => {
+                        let max = self.logs_state.max_scroll(20);
+                        self.logs_state.end(max);
+                    }
+                    KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        let max = self.logs_state.max_scroll(20);
+                        self.logs_state.scroll_down(10, max);
+                    }
+                    KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        self.logs_state.scroll_up(10);
                     }
                     _ => {}
                 }
@@ -530,7 +577,6 @@ impl App {
                 if self.view == View::Detail {
                     self.view = View::List;
                 }
-                self.clear_credential();
             }
 
             Action::CopyPassword => self.copy_secret()?,
@@ -632,6 +678,20 @@ impl App {
             }
             Action::Lock => self.lock(),
             Action::Refresh => self.refresh_data()?,
+            Action::ShowLogs => {
+                if self.vault.is_unlocked() {
+                    match self.load_audit_logs() {
+                        Ok(()) => {
+                            self.mode_state.to_logs();
+                        }
+                        Err(e) => {
+                            self.set_message(&format!("Failed to load logs: {}", e), MessageType::Error);
+                        }
+                    }
+                } else {
+                    self.set_message("Vault must be unlocked", MessageType::Error);
+                }
+            }
             Action::VerifyAudit => {
                 match self.verify_audit_logs() {
                     Ok((0, total)) => {
