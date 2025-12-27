@@ -25,6 +25,7 @@ sha2 = "0.10"
 hmac = "0.12"
 sha1 = "0.10"
 rand = "0.8"
+libc = "0.2"
 secrecy = "0.10.3"
 zeroize = { version = "1.8", features = ["derive"] }
 

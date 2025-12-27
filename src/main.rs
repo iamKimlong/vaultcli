@@ -22,6 +22,23 @@ mod vault;
 
 use app::{App, AppConfig};
 
+/// Harden process against memory disclosure
+fn harden_process() {
+    #[cfg(unix)]
+    {
+        // Prevent core dumps from containing secrets
+        unsafe {
+            libc::prctl(libc::PR_SET_DUMPABLE, 0);
+        }
+
+        // Attempt to lock memory (prevent swapping)
+        // This may fail without CAP_IPC_LOCK - that's okay, it's defense in depth
+        unsafe {
+            libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE);
+        }
+    }
+}
+
 struct PasswordField {
     value: String,
     cursor: usize,
@@ -33,7 +50,8 @@ impl PasswordField {
     }
 
     fn clear(&mut self) {
-        self.value.clear();
+        use zeroize::Zeroize;
+        self.value.zeroize();
         self.cursor = 0;
     }
 
@@ -51,6 +69,13 @@ impl PasswordField {
             KeyCode::Right if self.cursor < self.value.len() => self.cursor += 1,
             _ => {}
         }
+    }
+}
+
+impl Drop for PasswordField {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.value.zeroize();
     }
 }
 
@@ -82,6 +107,9 @@ fn draw_password_dialog(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Harden process before handling any secrets
+    harden_process();
+
     let args: Vec<String> = std::env::args().collect();
     let mut config = AppConfig::default();
     if let Some(path) = args.get(1) {
@@ -406,7 +434,7 @@ fn run_app(
             while app.is_locked() && !app.should_quit {
                 run_unlock(terminal, app)?;
             }
-            continue; // resume main loop after unlocking
+            continue;
         }
     }
 

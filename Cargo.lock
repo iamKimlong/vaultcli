@@ -1671,6 +1671,7 @@ dependencies = [
  "hex",
  "hkdf",
  "hmac",
+ "libc",
  "rand",
  "ratatui",
  "rusqlite",
