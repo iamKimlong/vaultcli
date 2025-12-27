@@ -5,7 +5,6 @@
 pub mod audit;
 pub mod credential;
 pub mod manager;
-pub mod project;
 pub mod search;
 
 use thiserror::Error;

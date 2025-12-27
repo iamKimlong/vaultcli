@@ -13,7 +13,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::Frame;
 
 use crate::crypto::totp::{self, TotpSecret};
-use crate::db::models::{Credential, CredentialType, Project};
+use crate::db::models::{Credential, CredentialType};
 use crate::input::keymap::{
     confirm_action, help_action, normal_mode_action, parse_command, text_input_action, Action,
 };
@@ -53,7 +53,6 @@ impl Default for AppConfig {
 #[derive(Debug, Clone)]
 pub enum PendingAction {
     DeleteCredential(String),
-    DeleteProject(String),
     LockVault,
     Quit,
 }
@@ -67,7 +66,6 @@ pub struct App {
     pub list_state: ListViewState,
     pub credentials: Vec<Credential>,
     pub credential_items: Vec<CredentialItem>,
-    pub projects: Vec<Project>,
     pub selected_credential: Option<DecryptedCredential>,
     pub selected_detail: Option<CredentialDetail>,
     pub message: Option<(String, MessageType, Instant)>,
@@ -91,7 +89,6 @@ impl App {
             list_state: ListViewState::new(),
             credentials: Vec::new(),
             credential_items: Vec::new(),
-            projects: Vec::new(),
             selected_credential: None,
             selected_detail: None,
             message: None,
@@ -134,7 +131,6 @@ impl App {
         self.vault.lock();
         self.credentials.clear();
         self.credential_items.clear();
-        self.projects.clear();
         self.selected_credential = None;
         self.selected_detail = None;
     }
@@ -144,7 +140,6 @@ impl App {
         let db = self.vault.db()?;
         
         self.credentials = crate::db::get_all_credentials(db.conn())?;
-        self.projects = crate::db::get_all_projects(db.conn())?;
         
         self.credential_items = self.credentials
             .iter()
@@ -157,18 +152,11 @@ impl App {
     }
 
     fn credential_to_item(&self, cred: &Credential) -> CredentialItem {
-        let project_name = self.projects
-            .iter()
-            .find(|p| p.id == cred.project_id)
-            .map(|p| p.name.clone())
-            .unwrap_or_else(|| "Unknown".to_string());
-
         CredentialItem {
             id: cred.id.clone(),
             name: cred.name.clone(),
             username: cred.username.clone(),
             credential_type: cred.credential_type,
-            project_name,
             tags: cred.tags.clone(),
         }
     }
@@ -186,12 +174,9 @@ impl App {
 
         let confirm_message = self.pending_action.as_ref().map(|a| match a {
             PendingAction::DeleteCredential(_) => "Delete this credential?",
-            PendingAction::DeleteProject(_) => "Delete this project?",
             PendingAction::LockVault => "Lock the vault?",
             PendingAction::Quit => "Quit Vault-CLI?",
         });
-
-        let project_name = self.projects.first().map(|p| p.name.as_str());
 
         let mut state = UiState {
             view: self.view,
@@ -203,7 +188,6 @@ impl App {
             message,
             confirm_message,
             password_prompt: None,
-            project_name,
             credential_form: self.credential_form.as_ref(),
             help_state: &self.help_state,
         };
@@ -372,7 +356,6 @@ impl App {
                 key,
                 form.get_name().to_string(),
                 form.credential_type,
-                form.project_id.clone(),
                 form.get_secret(),
                 form.get_username(),
                 form.get_url(),
@@ -527,7 +510,6 @@ impl App {
                         cred.url.clone(),
                         cred.tags.clone(),
                         cred.notes.as_ref().map(|s| s.expose_secret().to_string()),
-                        cred.project_id.clone(),
                         self.view.clone(),
                     );
                     self.credential_form = Some(form);
@@ -551,7 +533,6 @@ impl App {
                             decrypted.url.clone(),
                             decrypted.tags.clone(),
                             decrypted.notes.as_ref().map(|s| s.expose_secret().to_string()),
-                            decrypted.project_id.clone(),
                             self.view.clone(),
                         );
                         self.credential_form = Some(form);
@@ -624,19 +605,13 @@ impl App {
             false,
         )?;
 
-        let project_name = self.projects
-            .iter()
-            .find(|p| p.id == decrypted.project_id)
-            .map(|p| p.name.clone())
-            .unwrap_or_else(|| "Unknown".to_string());
-
-        self.selected_detail = Some(self.build_detail(&decrypted, &project_name));
+        self.selected_detail = Some(self.build_detail(&decrypted));
         self.selected_credential = Some(decrypted);
 
         Ok(())
     }
 
-    fn build_detail(&self, cred: &DecryptedCredential, project_name: &str) -> CredentialDetail {
+    fn build_detail(&self, cred: &DecryptedCredential) -> CredentialDetail {
         let (totp_code, totp_remaining) = if cred.credential_type == CredentialType::Totp {
             if let Some(ref secret_str) = cred.secret {
                 let totp_secret = serde_json::from_str::<TotpSecret>(secret_str.expose_secret())
@@ -668,7 +643,6 @@ impl App {
             url: cred.url.clone(),
             notes: cred.notes.as_ref().map(|s| s.expose_secret().to_string()),
             tags: cred.tags.clone(),
-            project_name: project_name.to_string(),
             created_at: cred.created_at.format("%d-%b-%Y %H:%M").to_string(),
             updated_at: cred.updated_at.format("%d-%b-%Y %H:%M").to_string(),
             totp_code,
@@ -821,12 +795,6 @@ impl App {
                     crate::db::delete_credential(db.conn(), &id)?;
                     self.refresh_data()?;
                     self.set_message("Credential deleted", MessageType::Success);
-                }
-                PendingAction::DeleteProject(id) => {
-                    let db = self.vault.db()?;
-                    crate::db::delete_project(db.conn(), &id)?;
-                    self.refresh_data()?;
-                    self.set_message("Project deleted", MessageType::Success);
                 }
                 PendingAction::LockVault => {
                     self.lock();

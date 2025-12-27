@@ -8,7 +8,7 @@
 use chrono::{DateTime, Local};
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::crypto::{decrypt_string, encrypt_string, DataEncryptionKey, MasterKey};
+use crate::crypto::{decrypt_string, encrypt_string, DataEncryptionKey};
 use crate::db::{self, AuditAction, Credential, CredentialType};
 
 use super::{VaultError, VaultResult};
@@ -19,7 +19,6 @@ pub struct DecryptedCredential {
     pub id: String,
     pub name: String,
     pub credential_type: CredentialType,
-    pub project_id: String,
     pub username: Option<String>,
     pub secret: Option<SecretString>,
     pub notes: Option<SecretString>,
@@ -40,7 +39,6 @@ impl DecryptedCredential {
             id: cred.id.clone(),
             name: cred.name.clone(),
             credential_type: cred.credential_type,
-            project_id: cred.project_id.clone(),
             username: cred.username.clone(),
             secret: secret.map(SecretString::from),
             notes: notes.map(SecretString::from),
@@ -58,7 +56,6 @@ pub fn create_credential(
     dek: &DataEncryptionKey,
     name: String,
     credential_type: CredentialType,
-    project_id: String,
     secret: &str,
     username: Option<String>,
     url: Option<String>,
@@ -76,7 +73,7 @@ pub fn create_credential(
         .map_err(|e| VaultError::CryptoError(e.to_string()))?;
 
     // Create credential
-    let mut cred = Credential::new(name, credential_type, project_id, encrypted_secret);
+    let mut cred = Credential::new(name, credential_type, encrypted_secret);
     cred.username = username;
     cred.url = url;
     cred.tags = tags;
@@ -159,14 +156,6 @@ pub fn list_credentials(conn: &rusqlite::Connection) -> VaultResult<Vec<Credenti
     Ok(db::get_all_credentials(conn)?)
 }
 
-/// List credentials by project
-pub fn list_credentials_by_project(
-    conn: &rusqlite::Connection,
-    project_id: &str,
-) -> VaultResult<Vec<Credential>> {
-    Ok(db::get_credentials_by_project(conn, project_id)?)
-}
-
 /// Log credential access
 pub fn log_credential_access(
     conn: &rusqlite::Connection,
@@ -205,7 +194,6 @@ mod tests {
             &dek,
             "Test Credential".to_string(),
             CredentialType::Password,
-            "default".to_string(),
             "my_secret_password",
             Some("testuser".to_string()),
             Some("https://example.com".to_string()),
@@ -239,7 +227,6 @@ mod tests {
             &dek,
             "Test".to_string(),
             CredentialType::Password,
-            "default".to_string(),
             "old_secret",
             None,
             None,
@@ -274,7 +261,6 @@ mod tests {
             &dek,
             "Test".to_string(),
             CredentialType::Password,
-            "default".to_string(),
             "secret",
             None,
             None,
@@ -301,7 +287,6 @@ mod tests {
             &dek,
             "Test".to_string(),
             CredentialType::Password,
-            "default".to_string(),
             "secret_password",
             None,
             None,

@@ -86,7 +86,6 @@ pub struct CredentialForm {
     pub cursor: usize,
     pub credential_type: CredentialType,
     pub editing_id: Option<String>,
-    pub project_id: String,
     pub show_password: bool,
     pub scroll_offset: usize,
     pub previous_view: View,
@@ -114,7 +113,6 @@ impl CredentialForm {
             cursor: 0,
             credential_type: CredentialType::Password,
             editing_id: None,
-            project_id: "default".to_string(),
             show_password: false,
             scroll_offset: 0,
             previous_view: View::List,
@@ -130,13 +128,11 @@ impl CredentialForm {
         url: Option<String>,
         tags: Vec<String>,
         notes: Option<String>,
-        project_id: String,
         previous_view: View,
     ) -> Self {
         let mut form = Self::new();
         form.editing_id = Some(id);
         form.credential_type = cred_type;
-        form.project_id = project_id;
         form.previous_view = previous_view;
 
         form.fields[0].value = name;

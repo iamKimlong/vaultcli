@@ -48,15 +48,6 @@ pub fn search(conn: &rusqlite::Connection, query: &str) -> VaultResult<SearchRes
     ))
 }
 
-/// Filter credentials by project
-pub fn filter_by_project(
-    conn: &rusqlite::Connection,
-    project_id: &str,
-) -> VaultResult<SearchResults> {
-    let credentials = db::get_credentials_by_project(conn, project_id)?;
-    Ok(SearchResults::new(credentials, None))
-}
-
 /// Filter credentials by tag
 pub fn filter_by_tag(conn: &rusqlite::Connection, tag: &str) -> VaultResult<SearchResults> {
     let credentials = db::get_credentials_by_tag(conn, tag)?;
@@ -84,7 +75,6 @@ pub fn filter_by_type(
 pub fn filter_combined(
     conn: &rusqlite::Connection,
     query: Option<&str>,
-    project_id: Option<&str>,
     tag: Option<&str>,
     cred_type: Option<CredentialType>,
 ) -> VaultResult<SearchResults> {
@@ -95,10 +85,6 @@ pub fn filter_combined(
     };
 
     // Apply filters
-    if let Some(pid) = project_id {
-        credentials.retain(|c| c.project_id == pid);
-    }
-
     if let Some(t) = tag {
         let tag_lower = t.to_lowercase();
         credentials.retain(|c| c.tags.iter().any(|ct| ct.to_lowercase().contains(&tag_lower)));
@@ -114,9 +100,6 @@ pub fn filter_combined(
         if !q.trim().is_empty() {
             query_parts.push(q.trim().to_string());
         }
-    }
-    if let Some(pid) = project_id {
-        query_parts.push(format!("project:{}", pid));
     }
     if let Some(t) = tag {
         query_parts.push(format!("tag:{}", t));
@@ -190,7 +173,6 @@ mod tests {
             let mut cred = Credential::new(
                 name.to_string(),
                 ctype,
-                "default".to_string(),
                 blob("secret"),
             );
             cred.tags = tags.into_iter().map(|s| s.to_string()).collect();
@@ -233,7 +215,6 @@ mod tests {
         let results = filter_combined(
             db.conn(),
             Some("AWS"),
-            None,
             Some("prod"),
             None,
         )

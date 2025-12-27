@@ -23,7 +23,6 @@ pub struct CredentialDetail {
     pub url: Option<String>,
     pub notes: Option<String>,
     pub tags: Vec<String>,
-    pub project_name: String,
     pub created_at: String,
     pub updated_at: String,
     pub totp_code: Option<String>,
@@ -63,11 +62,6 @@ impl<'a> Widget for DetailView<'a> {
             Span::styled(self.detail.credential_type.icon(), Style::default().fg(type_color)),
             Span::raw(" "),
             Span::styled(self.detail.credential_type.display_name(), value_style),
-        ]);
-
-        // Project
-        render_field(buf, inner.x, &mut y, inner.width, "Project", &[
-            Span::styled(&self.detail.project_name, Style::default().fg(Color::Cyan)),
         ]);
 
         // Username

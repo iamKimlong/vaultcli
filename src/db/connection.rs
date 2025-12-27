@@ -48,11 +48,11 @@ impl DatabaseConfig {
     }
 }
 
-/// Get default database path (~/.credlock/vault.db)
+/// Get default database path (~/.vault-cli/vault.db)
 fn default_db_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".credlock")
+        .join(".vault-cli")
         .join("vault.db")
 }
 
@@ -180,8 +180,8 @@ mod tests {
 
         let result = db.transaction(|conn| {
             conn.execute(
-                "INSERT INTO projects (id, name, description, color, created_at, updated_at) 
-                 VALUES ('test', 'Test', NULL, NULL, datetime('now'), datetime('now'))",
+                "INSERT INTO credentials (id, name, credential_type, encrypted_secret, created_at, updated_at) 
+                 VALUES ('test', 'Test', 'password', 'encrypted', datetime('now'), datetime('now'))",
                 [],
             )?;
             Ok(42)
@@ -192,7 +192,7 @@ mod tests {
         // Verify insert persisted
         let count: i32 = db
             .conn()
-            .query_row("SELECT COUNT(*) FROM projects WHERE id = 'test'", [], |row| {
+            .query_row("SELECT COUNT(*) FROM credentials WHERE id = 'test'", [], |row| {
                 row.get(0)
             })
             .unwrap();

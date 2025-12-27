@@ -19,7 +19,6 @@ pub struct CredentialItem {
     pub name: String,
     pub username: Option<String>,
     pub credential_type: CredentialType,
-    pub project_name: String,
     pub tags: Vec<String>,
 }
 

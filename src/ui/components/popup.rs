@@ -506,7 +506,6 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
                 (":clear", "Clear message"),
                 (":changepw", "Change master key"),
                 (":new", "New credential"),
-                (":project", "New project"),
                 (":gen", "Generate password"),
             ],
         ),

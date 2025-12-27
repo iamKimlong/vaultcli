@@ -36,7 +36,6 @@ pub struct UiState<'a> {
     pub message: Option<(&'a str, MessageType)>,
     pub confirm_message: Option<&'a str>,
     pub password_prompt: Option<PasswordPrompt<'a>>,
-    pub project_name: Option<&'a str>,
     pub credential_form: Option<&'a CredentialForm>,
     pub help_state: &'a HelpState,
 }
@@ -84,10 +83,6 @@ impl Renderer {
             status = status.command_buffer(buffer);
         } else if let Some((msg, msg_type)) = state.message {
             status = status.message(msg, msg_type);
-        }
-
-        if let Some(project) = state.project_name {
-            status = status.project_name(project);
         }
 
         if let Some(selected) = state.list_state.selected() {

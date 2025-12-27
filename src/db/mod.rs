@@ -26,5 +26,5 @@ pub type DbResult<T> = Result<T, DbError>;
 
 // Re-exports
 pub use connection::{Database, DatabaseConfig};
-pub use models::{AuditAction, AuditLog, Credential, CredentialType, Project};
+pub use models::{AuditAction, AuditLog, Credential, CredentialType};
 pub use queries::*;

@@ -37,26 +37,11 @@ fn create_schema(conn: &Connection) -> DbResult<()> {
             value TEXT NOT NULL
         );
 
-        -- Projects table
-        CREATE TABLE IF NOT EXISTS projects (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            description TEXT,
-            color TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        -- Create default project
-        INSERT OR IGNORE INTO projects (id, name, description, color, created_at, updated_at)
-        VALUES ('default', 'Default', 'Default project for uncategorized credentials', NULL, datetime('now'), datetime('now'));
-
         -- Credentials table
         CREATE TABLE IF NOT EXISTS credentials (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             credential_type TEXT NOT NULL,
-            project_id TEXT NOT NULL DEFAULT 'default',
             username TEXT,
             encrypted_secret TEXT NOT NULL,
             encrypted_notes TEXT,
@@ -64,8 +49,7 @@ fn create_schema(conn: &Connection) -> DbResult<()> {
             tags TEXT NOT NULL DEFAULT '[]',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
-            accessed_at TEXT,
-            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET DEFAULT
+            accessed_at TEXT
         );
 
         -- FTS5 virtual table for full-text search
@@ -107,13 +91,12 @@ fn create_schema(conn: &Connection) -> DbResult<()> {
         );
 
         -- Indexes for common queries
-        CREATE INDEX IF NOT EXISTS idx_credentials_project ON credentials(project_id);
         CREATE INDEX IF NOT EXISTS idx_credentials_type ON credentials(credential_type);
         CREATE INDEX IF NOT EXISTS idx_credentials_updated ON credentials(updated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp DESC);
 
         -- Store schema version
-        INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '1');
+        INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '2');
         "#,
     )?;
 
@@ -152,25 +135,8 @@ mod tests {
             .collect();
 
         assert!(tables.contains(&"credentials".to_string()));
-        assert!(tables.contains(&"projects".to_string()));
         assert!(tables.contains(&"audit_log".to_string()));
         assert!(tables.contains(&"metadata".to_string()));
-    }
-
-    #[test]
-    fn test_default_project_created() {
-        let conn = Connection::open_in_memory().unwrap();
-        init_schema(&conn).unwrap();
-
-        let name: String = conn
-            .query_row(
-                "SELECT name FROM projects WHERE id = 'default'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-
-        assert_eq!(name, "Default");
     }
 
     #[test]

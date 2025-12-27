@@ -38,7 +38,6 @@ pub struct StatusLine<'a> {
     command_buffer: Option<&'a str>,
     message: Option<(&'a str, MessageType)>,
     vault_name: Option<&'a str>,
-    project_name: Option<&'a str>,
     item_count: Option<(usize, usize)>,
 }
 
@@ -49,7 +48,6 @@ impl<'a> StatusLine<'a> {
             command_buffer: None,
             message: None,
             vault_name: None,
-            project_name: None,
             item_count: None,
         }
     }
@@ -66,11 +64,6 @@ impl<'a> StatusLine<'a> {
 
     pub fn vault_name(mut self, name: &'a str) -> Self {
         self.vault_name = Some(name);
-        self
-    }
-
-    pub fn project_name(mut self, name: &'a str) -> Self {
-        self.project_name = Some(name);
         self
     }
 
@@ -118,9 +111,6 @@ impl<'a> Widget for StatusLine<'a> {
         }
 
         let mut right_parts: Vec<String> = Vec::new();
-        if let Some(project) = self.project_name {
-            right_parts.push(format!("[{}]", project));
-        }
         if let Some((selected, total)) = self.item_count {
             right_parts.push(format!("{}/{}", selected + 1, total));
         }

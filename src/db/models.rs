@@ -1,6 +1,6 @@
 //! Database Models
 //!
-//! Data structures for credentials, projects, and audit logs.
+//! Data structures for credentials and audit logs.
 
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -79,7 +79,6 @@ pub struct Credential {
     pub id: String,
     pub name: String,
     pub credential_type: CredentialType,
-    pub project_id: String,
     pub username: Option<String>,
     pub encrypted_secret: String,
     pub encrypted_notes: Option<String>,
@@ -95,7 +94,6 @@ impl Credential {
     pub fn new(
         name: String,
         credential_type: CredentialType,
-        project_id: String,
         encrypted_secret: String,
     ) -> Self {
         let now = Local::now();
@@ -103,7 +101,6 @@ impl Credential {
             id: uuid::Uuid::new_v4().to_string(),
             name,
             credential_type,
-            project_id,
             username: None,
             encrypted_secret,
             encrypted_notes: None,
@@ -112,45 +109,6 @@ impl Credential {
             created_at: now,
             updated_at: now,
             accessed_at: None,
-        }
-    }
-}
-
-/// Project model
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Project {
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub color: Option<String>,
-    pub created_at: DateTime<Local>,
-    pub updated_at: DateTime<Local>,
-}
-
-impl Project {
-    /// Create a new project with generated ID
-    pub fn new(name: String, description: Option<String>) -> Self {
-        let now = Local::now();
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            name,
-            description,
-            color: None,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-
-    /// Create the default project
-    pub fn default_project() -> Self {
-        let now = Local::now();
-        Self {
-            id: "default".to_string(),
-            name: "Default".to_string(),
-            description: Some("Default project".to_string()),
-            color: None,
-            created_at: now,
-            updated_at: now,
         }
     }
 }
@@ -258,21 +216,11 @@ mod tests {
         let cred = Credential::new(
             "Test".to_string(),
             CredentialType::Password,
-            "default".to_string(),
             "encrypted".to_string(),
         );
 
         assert!(!cred.id.is_empty());
         assert_eq!(cred.name, "Test");
         assert_eq!(cred.credential_type, CredentialType::Password);
-    }
-
-    #[test]
-    fn test_project_new() {
-        let project = Project::new("My Project".to_string(), Some("Description".to_string()));
-
-        assert!(!project.id.is_empty());
-        assert_ne!(project.id, "default");
-        assert_eq!(project.name, "My Project");
     }
 }

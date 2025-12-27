@@ -3,8 +3,6 @@
 //! Implements a hierarchical key derivation scheme:
 //! - Master Key (from password) -> wraps DEK
 //! - DEK (Data Encryption Key) -> encrypts credentials
-//! - Project Keys (derived from DEK) -> for future per-project encryption
-//! - Credential Keys (derived from project keys) -> for future per-credential keys
 
 use hkdf::Hkdf;
 use sha2::Sha256;
@@ -13,7 +11,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use super::dek::DataEncryptionKey;
 use super::{CryptoError, CryptoResult, MasterKey};
 
-/// A derived key for projects or credentials
+/// A derived key for credentials
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct DerivedKey {
     key: [u8; 32],
@@ -100,20 +98,9 @@ impl KeyHierarchy {
         &self.master_key
     }
 
-    /// Derive a project-level key from the DEK
-    pub fn derive_project_key(&self, project_id: &str) -> CryptoResult<DerivedKey> {
-        derive_key(self.dek.as_bytes(), "project", project_id)
-    }
-
-    /// Derive a credential-level key under a project
-    pub fn derive_credential_key(
-        &self,
-        project_id: &str,
-        credential_id: &str,
-    ) -> CryptoResult<DerivedKey> {
-        // First derive project key, then credential key
-        let project_key = self.derive_project_key(project_id)?;
-        derive_key(project_key.as_bytes(), "credential", credential_id)
+    /// Derive a credential-level key
+    pub fn derive_credential_key(&self, credential_id: &str) -> CryptoResult<DerivedKey> {
+        derive_key(self.dek.as_bytes(), "credential", credential_id)
     }
 
     /// Derive a key for audit log HMAC
@@ -122,17 +109,12 @@ impl KeyHierarchy {
     }
 }
 
-/// Derive a project key directly (convenience function)
-pub fn derive_project_key(dek: &DataEncryptionKey, project_id: &str) -> CryptoResult<DerivedKey> {
-    derive_key(dek.as_bytes(), "project", project_id)
-}
-
 /// Derive a credential key directly (convenience function)
 pub fn derive_credential_key(
-    project_key: &DerivedKey,
+    dek: &DataEncryptionKey,
     credential_id: &str,
 ) -> CryptoResult<DerivedKey> {
-    derive_key(project_key.as_bytes(), "credential", credential_id)
+    derive_key(dek.as_bytes(), "credential", credential_id)
 }
 
 /// Core HKDF key derivation
@@ -204,38 +186,18 @@ mod tests {
     }
 
     #[test]
-    fn test_project_key_derivation() {
-        let hierarchy = KeyHierarchy::new(test_master_key()).unwrap();
-
-        let key1 = hierarchy.derive_project_key("project-1").unwrap();
-        let key2 = hierarchy.derive_project_key("project-2").unwrap();
-
-        // Different projects should have different keys
-        assert_ne!(key1.as_bytes(), key2.as_bytes());
-
-        // Same project should derive same key
-        let key1_again = hierarchy.derive_project_key("project-1").unwrap();
-        assert_eq!(key1.as_bytes(), key1_again.as_bytes());
-    }
-
-    #[test]
     fn test_credential_key_derivation() {
         let hierarchy = KeyHierarchy::new(test_master_key()).unwrap();
 
-        let key1 = hierarchy
-            .derive_credential_key("project-1", "cred-1")
-            .unwrap();
-        let key2 = hierarchy
-            .derive_credential_key("project-1", "cred-2")
-            .unwrap();
-        let key3 = hierarchy
-            .derive_credential_key("project-2", "cred-1")
-            .unwrap();
+        let key1 = hierarchy.derive_credential_key("cred-1").unwrap();
+        let key2 = hierarchy.derive_credential_key("cred-2").unwrap();
 
         // Different credentials have different keys
         assert_ne!(key1.as_bytes(), key2.as_bytes());
-        // Same credential ID in different projects have different keys
-        assert_ne!(key1.as_bytes(), key3.as_bytes());
+
+        // Same credential should derive same key
+        let key1_again = hierarchy.derive_credential_key("cred-1").unwrap();
+        assert_eq!(key1.as_bytes(), key1_again.as_bytes());
     }
 
     #[test]
@@ -247,22 +209,15 @@ mod tests {
         let mut hierarchy = KeyHierarchy::new(master_key1).unwrap();
 
         // Derive some keys
-        let project_key_before = hierarchy.derive_project_key("my-project").unwrap();
-        let cred_key_before = hierarchy
-            .derive_credential_key("my-project", "cred-1")
-            .unwrap();
+        let cred_key_before = hierarchy.derive_credential_key("cred-1").unwrap();
 
         // Change password
         let (master_key2, _) = derive_master_key(b"password2", &params).unwrap();
         hierarchy.change_master_key(master_key2).unwrap();
 
         // Derived keys should be identical (DEK unchanged)
-        let project_key_after = hierarchy.derive_project_key("my-project").unwrap();
-        let cred_key_after = hierarchy
-            .derive_credential_key("my-project", "cred-1")
-            .unwrap();
+        let cred_key_after = hierarchy.derive_credential_key("cred-1").unwrap();
 
-        assert_eq!(project_key_before.as_bytes(), project_key_after.as_bytes());
         assert_eq!(cred_key_before.as_bytes(), cred_key_after.as_bytes());
     }
 }
