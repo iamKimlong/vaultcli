@@ -47,6 +47,7 @@ pub enum Action {
     Filter(String),
     GeneratePassword,
     ChangePassword,
+    VerifyAudit,
     
     // Confirmation
     Confirm,
@@ -72,6 +73,7 @@ pub enum Action {
 
     // No action
     None,
+    Invalid(String),
 }
 
 /// Map key event to action in normal mode
@@ -184,7 +186,9 @@ pub fn parse_command(cmd: &str) -> Action {
         "passwd" | "password" | "changepw" => Action::ChangePassword,
         "lock" => Action::Lock,
         "refresh" => Action::Refresh,
-        _ => Action::None,
+        "audit" | "verify" => Action::VerifyAudit,
+        "" => Action::None,
+        other => Action::Invalid(other.to_string()),
     }
 }
 
