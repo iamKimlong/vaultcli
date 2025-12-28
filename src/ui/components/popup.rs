@@ -486,7 +486,7 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
         (
             "Clipboard",
             vec![
-                ("yy / c", "Copy password"),
+                ("yy / c", "Copy password/secret"),
                 ("u", "Copy username"),
                 ("t", "Copy TOTP code"),
             ],
@@ -506,6 +506,8 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
                 (":q", "Quit"),
                 (":clear", "Clear message"),
                 (":changepw", "Change master key"),
+                (":audit", "Verify audit log integrity"),
+                (":log", "View logs"),
                 (":new", "New credential"),
                 (":gen", "Generate password"),
             ],
@@ -517,6 +519,7 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
                 ("Ctrl-l", "Clear message"),
                 ("Ctrl-p", "Change master key"),
                 ("L", "Lock vault"),
+                ("i", "View logs"),
                 ("q", "Quit"),
             ],
         ),
