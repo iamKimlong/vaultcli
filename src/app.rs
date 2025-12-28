@@ -832,7 +832,7 @@ impl App {
 
         self.copy_to_clipboard(&username)?;
         self.log_audit(AuditAction::Copy, Some(&cred_id), Some("username"))?;
-        self.set_message("Username copied", MessageType::Success);
+        self.set_message(&format!("Username copied ({}s)", self.config.clipboard_timeout.as_secs()), MessageType::Success);
         Ok(())
     }
 
