@@ -305,8 +305,8 @@ impl<'a> HelpScreen<'a> {
         Self { state }
     }
 
-    /// Calculate total content height for scrolling bounds
-    pub fn content_height() -> usize {
+    /// Calculate total content height for single-column mode
+    fn single_column_height() -> usize {
         help_sections()
             .iter()
             .map(|(_, bindings)| 1 + bindings.len() + 1) // header + bindings + spacing
@@ -314,9 +314,38 @@ impl<'a> HelpScreen<'a> {
             .saturating_sub(1) // no trailing space after last section
     }
 
-    /// Calculate max scroll value given visible height
-    pub fn max_scroll(visible_height: u16) -> usize {
-        Self::content_height().saturating_sub(visible_height as usize)
+    /// Calculate total content height for two-column mode
+    fn two_column_height() -> usize {
+        let sections = help_sections();
+        let (left, right) = split_sections_for_columns(&sections);
+        let left_height: usize = left.iter().map(|(_, b)| 1 + b.len() + 1).sum::<usize>().saturating_sub(1);
+        let right_height: usize = right.iter().map(|(_, b)| 1 + b.len() + 1).sum::<usize>().saturating_sub(1);
+        left_height.max(right_height)
+    }
+
+    /// Calculate content height based on whether two columns will be used
+    pub fn content_height(area: Rect) -> usize {
+        let popup = centered_rect(65, 65, area);
+        let inner_width = popup.width.saturating_sub(2); // Account for borders
+        if inner_width >= TWO_COLUMN_MIN_WIDTH {
+            Self::two_column_height()
+        } else {
+            Self::single_column_height()
+        }
+    }
+
+    /// Calculate max scroll value given terminal area
+    pub fn max_scroll(area: Rect) -> usize {
+        let visible = Self::visible_height(area) as usize;
+        let content = Self::content_height(area);
+        content.saturating_sub(visible)
+    }
+
+    /// Calculate visible height for the help popup given terminal area
+    pub fn visible_height(area: Rect) -> u16 {
+        let popup = centered_rect(65, 65, area);
+        // Account for border (2 lines)
+        popup.height.saturating_sub(2)
     }
 }
 
@@ -422,9 +451,9 @@ fn render_help_line(x: u16, y: u16, width: u16, line: &HelpLine, buf: &mut Buffe
             );
         }
         HelpLine::Binding(key, desc) => {
-            buf.set_string(x + 2, y, *key, Style::default().fg(Color::Cyan));
-            let desc_x = x + 14;
-            let desc_width = width.saturating_sub(14) as usize;
+            buf.set_string(x + 4, y, *key, Style::default().fg(Color::Cyan));
+            let desc_x = x + 16;
+            let desc_width = width.saturating_sub(16) as usize;
             let truncated: String = desc.chars().take(desc_width).collect();
             buf.set_string(desc_x, y, &truncated, Style::default().fg(Color::Gray));
         }

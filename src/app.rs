@@ -11,12 +11,13 @@ use secrecy::ExposeSecret;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::Frame;
+use ratatui::layout::Rect;
 
 use crate::crypto::totp::{self, TotpSecret};
 use crate::db::models::{Credential, CredentialType};
 use crate::db::AuditAction;
 use crate::input::keymap::{
-    confirm_action, help_action, normal_mode_action, parse_command, text_input_action, Action,
+    confirm_action, normal_mode_action, parse_command, text_input_action, Action,
 };
 use crate::input::modes::{InputMode, ModeState};
 use crate::ui::components::{CredentialDetail, CredentialForm, CredentialItem, ListViewState, LogsState, MessageType};
@@ -64,6 +65,7 @@ pub struct App {
     pub vault: Vault,
     pub mode_state: ModeState,
     pub view: View,
+    pub terminal_size: Rect,
     pub list_state: ListViewState,
     pub credentials: Vec<Credential>,
     pub credential_items: Vec<CredentialItem>,
@@ -88,6 +90,7 @@ impl App {
             config,
             mode_state: ModeState::new(),
             view: View::List,
+            terminal_size: Rect::default(),
             list_state: ListViewState::new(),
             credentials: Vec::new(),
             credential_items: Vec::new(),
@@ -227,6 +230,7 @@ impl App {
 
     /// Render the application
     pub fn render(&mut self, frame: &mut Frame) {
+        self.terminal_size = frame.area();
         self.check_message_expiry();
 
         let message = self.message.as_ref().map(|(m, t, _)| (m.as_str(), *t));
@@ -295,13 +299,13 @@ impl App {
             }
             InputMode::Confirm => confirm_action(key),
             InputMode::Help => {
+                let max = crate::ui::components::popup::HelpScreen::max_scroll(self.terminal_size);
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc | KeyCode::Char('?') => {
                         self.mode_state.to_normal();
                         return Ok(false);
                     }
                     KeyCode::Char('j') | KeyCode::Down => {
-                        let max = crate::ui::components::popup::HelpScreen::max_scroll(20);
                         self.help_state.scroll_down(1, max);
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
@@ -311,11 +315,9 @@ impl App {
                         self.help_state.home();
                     }
                     KeyCode::Char('G') => {
-                        let max = crate::ui::components::popup::HelpScreen::max_scroll(20);
                         self.help_state.end(max);
                     }
                     KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        let max = crate::ui::components::popup::HelpScreen::max_scroll(20);
                         self.help_state.scroll_down(10, max);
                     }
                     KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -326,13 +328,14 @@ impl App {
                 return Ok(false);
             }
             InputMode::Logs => {
+                let visible = self.terminal_size.height.saturating_sub(12);
+                let max = self.logs_state.max_scroll(visible);
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Char('i') | KeyCode::Esc => {
                         self.mode_state.to_normal();
                         return Ok(false);
                     }
                     KeyCode::Char('j') | KeyCode::Down => {
-                        let max = self.logs_state.max_scroll(20);
                         self.logs_state.scroll_down(1, max);
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
@@ -342,11 +345,9 @@ impl App {
                         self.logs_state.home();
                     }
                     KeyCode::Char('G') => {
-                        let max = self.logs_state.max_scroll(20);
                         self.logs_state.end(max);
                     }
                     KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        let max = self.logs_state.max_scroll(20);
                         self.logs_state.scroll_down(10, max);
                     }
                     KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {

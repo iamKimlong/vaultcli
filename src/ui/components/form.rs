@@ -326,21 +326,28 @@ impl<'a> Widget for CredentialFormWidget<'a> {
         block.render(form_area, buf);
 
         // Calculate field layout
-        let has_up_indicator = self.form.scroll_offset > 0;
-        let mut y = if has_up_indicator { inner.y + 1 } else { inner.y };
         let label_width = 18u16;
-        let visible_height = inner.height.saturating_sub(2);
+        let visible_height = inner.height.saturating_sub(1); // Reserve 1 line for help text
         let max_visible_fields = (visible_height / 2) as usize;
 
+        let needs_scrolling = self.form.fields.len() > max_visible_fields;
+        let scroll_offset = if needs_scrolling { self.form.scroll_offset } else { 0 };
+
+        let has_up_indicator = needs_scrolling && scroll_offset > 0;
+        let mut y = if has_up_indicator { inner.y + 1 } else { inner.y };
+
         // Show scroll indicator at top if scrolled
-        if self.form.scroll_offset > 0 {
-            let indicator = "";
-            let x = inner.x + (inner.width.saturating_sub(indicator.len() as u16)) / 2;
-            buf.set_string(x, inner.y, indicator, Style::default().fg(Color::Magenta));
+        if has_up_indicator {
+            buf.set_string(
+                inner.x + inner.width / 2,
+                inner.y,
+                "",
+                Style::default().fg(Color::Magenta),
+            );
         }
 
-        for (i, field) in self.form.fields.iter().enumerate().skip(self.form.scroll_offset) {
-            if i >= self.form.scroll_offset + max_visible_fields {
+        for (i, field) in self.form.fields.iter().enumerate().skip(scroll_offset) {
+            if i >= scroll_offset + max_visible_fields {
                 break;
             }
 
@@ -413,10 +420,13 @@ impl<'a> Widget for CredentialFormWidget<'a> {
         }
 
         // Show scroll indicator at bottom if more fields below
-        if self.form.scroll_offset + max_visible_fields < self.form.fields.len() {
-            let indicator = "";
-            let x = inner.x + (inner.width.saturating_sub(indicator.len() as u16)) / 2;
-            buf.set_string(x, inner.y + inner.height - 2, indicator, Style::default().fg(Color::Magenta));
+        if needs_scrolling && scroll_offset + max_visible_fields < self.form.fields.len() {
+            buf.set_string(
+                inner.x + inner.width / 2,
+                inner.y + inner.height - 2,
+                "",
+                Style::default().fg(Color::Magenta),
+            );
         }
 
         // Help text at bottom
