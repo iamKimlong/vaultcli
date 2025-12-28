@@ -214,7 +214,7 @@ mod tests {
     fn test_normal_navigation() {
         assert_eq!(normal_mode_action(key(KeyCode::Char('j')), None).0, Action::MoveDown);
         assert_eq!(normal_mode_action(key(KeyCode::Char('k')), None).0, Action::MoveUp);
-        assert_eq!(normal_mode_action(key(KeyCode::Char('G')), None).0, Action::MoveToBottom);
+        assert_eq!(normal_mode_action(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT), None).0, Action::MoveToBottom);
     }
 
     #[test]
