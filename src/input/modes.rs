@@ -13,8 +13,6 @@ pub enum InputMode {
     Command,
     /// Search mode (/)
     Search,
-    /// Filter mode (f)
-    Filter,
     /// Confirmation dialog
     Confirm,
     /// Help screen
@@ -31,7 +29,6 @@ impl InputMode {
             Self::Insert => "INSERT",
             Self::Command => "COMMAND",
             Self::Search => "SEARCH",
-            Self::Filter => "FILTER",
             Self::Confirm => "CONFIRM",
             Self::Help => "HELP",
             Self::Logs => "LOG",
@@ -40,7 +37,7 @@ impl InputMode {
 
     /// Check if mode accepts text input
     pub fn is_text_input(&self) -> bool {
-        matches!(self, Self::Insert | Self::Command | Self::Search | Self::Filter)
+        matches!(self, Self::Insert | Self::Command | Self::Search)
     }
 }
 
@@ -100,11 +97,6 @@ impl ModeState {
     /// Switch to search mode
     pub fn to_search(&mut self) {
         self.set_mode(InputMode::Search);
-    }
-
-    /// Switch to filter mode
-    pub fn to_filter(&mut self) {
-        self.set_mode(InputMode::Filter);
     }
 
     /// Switch to confirm mode

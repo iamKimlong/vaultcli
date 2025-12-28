@@ -31,8 +31,8 @@ pub struct ListViewState {
     pub total: usize,
     /// Scroll offset
     pub offset: usize,
-    /// Current filter/search query
-    pub filter: Option<String>,
+    /// Current search query
+    pub search: Option<String>,
     /// Internal list state for ratatui
     list_state: ListState,
 }
@@ -43,7 +43,7 @@ impl Default for ListViewState {
             selected: None,
             total: 0,
             offset: 0,
-            filter: None,
+            search: None,
             list_state: ListState::default(),
         }
     }

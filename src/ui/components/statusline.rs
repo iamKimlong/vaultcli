@@ -85,7 +85,6 @@ impl<'a> Widget for StatusLine<'a> {
             InputMode::Insert => Style::default().fg(Color::Black).bg(Color::Green),
             InputMode::Command => Style::default().fg(Color::Black).bg(Color::Red),
             InputMode::Search => Style::default().fg(Color::Black).bg(Color::Magenta),
-            InputMode::Filter => Style::default().fg(Color::Black).bg(Color::Cyan),
             InputMode::Confirm => Style::default().fg(Color::Black).bg(Color::Red),
             InputMode::Help => Style::default().fg(Color::Black).bg(Color::Yellow),
             InputMode::Logs => Style::default().fg(Color::Black).bg(Color::Green),
@@ -102,7 +101,6 @@ impl<'a> Widget for StatusLine<'a> {
             let prefix = match self.mode {
                 InputMode::Command => ":",
                 InputMode::Search => "/",
-                InputMode::Filter => "filter: ",
                 _ => "",
             };
             let cmd_text = format!("{}{}", prefix, buffer);
@@ -152,7 +150,7 @@ impl<'a> HelpBar<'a> {
                 ("Enter", "confirm"),
                 ("C-u", "clear"),
             ],
-            InputMode::Command | InputMode::Search | InputMode::Filter => vec![
+            InputMode::Command | InputMode::Search => vec![
                 ("Esc", "cancel"),
                 ("Enter", "execute"),
             ],

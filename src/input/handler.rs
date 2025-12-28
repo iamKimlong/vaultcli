@@ -21,7 +21,7 @@ impl InputHandler {
                 state.pending = new_pending;
                 action
             }
-            InputMode::Insert | InputMode::Command | InputMode::Search | InputMode::Filter => {
+            InputMode::Insert | InputMode::Command | InputMode::Search => {
                 let action = text_input_action(key);
                 match &action {
                     Action::InsertChar(c) => {
@@ -61,7 +61,6 @@ impl InputHandler {
                         let result = match state.mode {
                             InputMode::Command => Action::ExecuteCommand(buffer),
                             InputMode::Search => Action::Search(buffer),
-                            InputMode::Filter => Action::Filter(buffer),
                             _ => Action::Submit,
                         };
                         state.to_normal();

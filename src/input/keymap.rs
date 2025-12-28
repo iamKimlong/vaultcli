@@ -38,13 +38,11 @@ pub enum Action {
     // Mode changes
     EnterCommand,
     EnterSearch,
-    EnterFilter,
     ShowHelp,
 
     // Commands
     ExecuteCommand(String),
     Search(String),
-    Filter(String),
     GeneratePassword,
     ChangePassword,
     VerifyAudit,
@@ -116,7 +114,6 @@ pub fn normal_mode_action(key: KeyEvent, pending: Option<char>) -> (Action, Opti
         // Mode changes
         (KeyCode::Char(':'), _, _) => (Action::EnterCommand, None),
         (KeyCode::Char('/'), _, _) => (Action::EnterSearch, None),
-        (KeyCode::Char('f'), _, _) => (Action::EnterFilter, None),
         (KeyCode::Char('?'), _, _) => (Action::ShowHelp, None),
 
         // Application

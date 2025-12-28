@@ -289,7 +289,7 @@ impl App {
                 self.mode_state.pending = pending;
                 action
             }
-            InputMode::Command | InputMode::Search | InputMode::Filter => {
+            InputMode::Command | InputMode::Search => {
                 let action = text_input_action(key);
                 self.handle_text_input(action)
             }
@@ -507,7 +507,6 @@ impl App {
                 let result = match self.mode_state.mode {
                     InputMode::Command => Action::ExecuteCommand(buffer),
                     InputMode::Search => Action::Search(buffer),
-                    InputMode::Filter => Action::Filter(buffer),
                     _ => Action::None,
                 };
                 self.mode_state.to_normal();
@@ -645,14 +644,12 @@ impl App {
 
             Action::EnterCommand => self.mode_state.to_command(),
             Action::EnterSearch => self.mode_state.to_search(),
-            Action::EnterFilter => self.mode_state.to_filter(),
 
             Action::ExecuteCommand(cmd) => {
                 let parsed = parse_command(&cmd);
                 return self.execute_action(parsed);
             }
             Action::Search(query) => self.search_credentials(&query)?,
-            Action::Filter(filter) => self.search_credentials(&filter)?,
 
             Action::GeneratePassword => {
                 let password = crate::crypto::generate_password(&crate::crypto::PasswordPolicy::default());

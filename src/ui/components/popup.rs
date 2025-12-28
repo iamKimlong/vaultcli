@@ -495,7 +495,6 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
             "View",
             vec![
                 ("s", "Toggle password"),
-                ("f", "Filter credentials"),
                 ("/", "Search"),
             ],
         ),

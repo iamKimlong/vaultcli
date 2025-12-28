@@ -1,4 +1,4 @@
-//! Search and Filter Operations
+//! Search Operations
 //!
 //! Fast search and filtering of credentials.
 
@@ -48,14 +48,14 @@ pub fn search(conn: &rusqlite::Connection, query: &str) -> VaultResult<SearchRes
     ))
 }
 
-/// Filter credentials by tag
-pub fn filter_by_tag(conn: &rusqlite::Connection, tag: &str) -> VaultResult<SearchResults> {
+/// Search credentials by tag
+pub fn search_by_tag(conn: &rusqlite::Connection, tag: &str) -> VaultResult<SearchResults> {
     let credentials = db::get_credentials_by_tag(conn, tag)?;
     Ok(SearchResults::new(credentials, Some(format!("tag:{}", tag))))
 }
 
-/// Filter credentials by type
-pub fn filter_by_type(
+/// Search credentials by type
+pub fn search_by_type(
     conn: &rusqlite::Connection,
     cred_type: CredentialType,
 ) -> VaultResult<SearchResults> {
@@ -71,8 +71,8 @@ pub fn filter_by_type(
     ))
 }
 
-/// Combined filter with multiple criteria
-pub fn filter_combined(
+/// Combined search with multiple criteria
+pub fn search_combined(
     conn: &rusqlite::Connection,
     query: Option<&str>,
     tag: Option<&str>,
@@ -196,23 +196,23 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_by_type() {
+    fn test_search_by_type() {
         let db = Database::open_in_memory().unwrap();
         setup_test_data(db.conn());
 
-        let results = filter_by_type(db.conn(), CredentialType::ApiKey).unwrap();
+        let results = search_by_type(db.conn(), CredentialType::ApiKey).unwrap();
         assert_eq!(results.total, 3);
 
-        let results = filter_by_type(db.conn(), CredentialType::Password).unwrap();
+        let results = search_by_type(db.conn(), CredentialType::Password).unwrap();
         assert_eq!(results.total, 1);
     }
 
     #[test]
-    fn test_combined_filter() {
+    fn test_combined_search() {
         let db = Database::open_in_memory().unwrap();
         setup_test_data(db.conn());
 
-        let results = filter_combined(
+        let results = search_combined(
             db.conn(),
             Some("AWS"),
             Some("prod"),
