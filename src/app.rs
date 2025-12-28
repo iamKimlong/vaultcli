@@ -576,6 +576,7 @@ impl App {
                 if self.view == View::Detail {
                     self.view = View::List;
                 }
+                self.search_credentials("")?;
             }
 
             Action::CopyPassword => self.copy_secret()?,
