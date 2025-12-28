@@ -30,12 +30,6 @@ fn harden_process() {
         unsafe {
             libc::prctl(libc::PR_SET_DUMPABLE, 0);
         }
-
-        // Attempt to lock memory (prevent swapping)
-        // This may fail without CAP_IPC_LOCK - that's okay, it's defense in depth
-        unsafe {
-            libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE);
-        }
     }
 }
 
