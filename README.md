@@ -1,6 +1,6 @@
 [Features](#features) · [Installation](#installation) · [Usage](#usage) · [Security](#security) · [Dependencies](#dependencies)
 
-# Vault-CLI
+# Self-hosted, local-first security - your credentials never touch our servers
 
 **vault-cli** is local-first encrypted credential manager with vim-style TUI, built in Rust.
 
