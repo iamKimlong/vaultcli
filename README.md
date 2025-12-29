@@ -18,12 +18,12 @@ Self-hosted, local-first architecture - your credentials never touch our servers
 - **Full-Text Search:** SQLite FTS5 for fast search
 - **Search or filter by project/tag:** Organize your credentials and keys via tagging
 - **Vim Keybindings:** Modal editing with hjkl navigation
-- **TOTP Support:** Generate 2FA codes with countdown timer
+- **TOTP Support:** Generate 2FA codes with countdown timer (Coming soon...)
 - **Password Generator:** Configurable CSPRNG password generation
 - **Password Strength Checker:** Evaluates the security of user passwords in real-time, providing feedback on complexity, and length to help users create stronger, safer passwords.
 - **Audit Trail:** Extensive HMAC-signed logs for tamper detection and activity records
 - **Auto-clear clipboard:** Automatically overwrite or wipe clipboard memory with 0-bytes (Zeroization) after 15 seconds
-- **Auto-lock:** Automatically lock vault after 5 minutes of inactivity
+- **Auto-lock:** Automatically lock vault after 5 minutes regardless of activity
 
 <a name="installation"></a>
 ## ⚡ Installation
@@ -193,14 +193,9 @@ vault
     Features: `derive`
 - [`serde_json`](https://crates.io/crates/serde_json)
 
-### Platform
-
-- [`libc`](https://crates.io/crates/libc) (Unix)
-- [`windows-sys`](https://crates.io/crates/windows-sys) (Windows)
-    Features: `Win32_System_Memory`
-
 ### Utilities
 
+- [`libc`](https://crates.io/crates/libc)
 - [`chrono`](https://crates.io/crates/chrono)
     Features: `serde`
 - [`uuid`](https://crates.io/crates/uuid)
