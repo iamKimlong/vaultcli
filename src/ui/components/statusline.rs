@@ -143,7 +143,7 @@ impl<'a> HelpBar<'a> {
                 ("yy", "yank"),
                 ("dd", "delete"),
                 ("/", "search"),
-                (":", "cmd"),
+                (":", "command"),
                 ("?", "help"),
             ],
             InputMode::Insert => vec![
