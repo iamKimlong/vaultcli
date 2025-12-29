@@ -385,15 +385,33 @@ impl<'a> Widget for CredentialFormWidget<'a> {
                 }
             }
 
-            // Field value
-            let display_value = if field.field_type == FieldType::Select {
+            // Field value with horizontal scrolling
+            let value_width_usize = value_width as usize;
+            let (display_value, display_cursor) = if field.field_type == FieldType::Select {
                 // Show type with icon
                 let icon = self.form.credential_type.icon();
-                format!("{} {}  [Space/Ctrl+Space]", icon, field.value)
-            } else if field.masked && !self.form.show_password {
-                "*".repeat(field.value.len().min(value_width as usize))
+                (format!("{} {}  [Space/Ctrl+Space]", icon, field.value), 0)
             } else {
-                field.value.clone()
+                // Calculate scroll offset to keep cursor visible
+                let text = if field.masked && !self.form.show_password {
+                    "*".repeat(field.value.len())
+                } else {
+                    field.value.clone()
+                };
+                
+                let cursor_pos = self.form.cursor;
+                // Determine scroll offset - keep cursor within visible area with some padding
+                let scroll = if cursor_pos >= value_width_usize.saturating_sub(1) {
+                    cursor_pos.saturating_sub(value_width_usize.saturating_sub(2))
+                } else {
+                    0
+                };
+                
+                // Extract visible portion of text
+                let visible: String = text.chars().skip(scroll).take(value_width_usize).collect();
+                let adjusted_cursor = cursor_pos.saturating_sub(scroll);
+                
+                (visible, adjusted_cursor)
             };
 
             let value_style = if field.field_type == FieldType::Select {
@@ -408,7 +426,7 @@ impl<'a> Widget for CredentialFormWidget<'a> {
 
             // Cursor
             if is_active && field.field_type != FieldType::Select {
-                let cursor_x = value_x + self.form.cursor as u16;
+                let cursor_x = value_x + display_cursor as u16;
                 if cursor_x < value_x + value_width {
                     if let Some(cell) = buf.cell_mut((cursor_x, y)) {
                         cell.set_style(Style::default().bg(Color::White).fg(Color::Black));
