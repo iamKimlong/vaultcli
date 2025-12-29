@@ -4,10 +4,10 @@
 
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, BorderType, Clear, Paragraph, Widget, Wrap},
+    widgets::{Block, Borders, BorderType, Clear, Widget},
 };
 
 use crate::db::models::CredentialType;
