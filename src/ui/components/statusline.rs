@@ -24,7 +24,7 @@ pub enum MessageType {
 impl MessageType {
     pub fn color(&self) -> Color {
         match self {
-            Self::Info => Color::White,
+            Self::Info => Color::Blue,
             Self::Success => Color::Green,
             Self::Warning => Color::Yellow,
             Self::Error => Color::Red,
@@ -88,6 +88,7 @@ impl<'a> Widget for StatusLine<'a> {
             InputMode::Confirm => Style::default().fg(Color::Black).bg(Color::Red),
             InputMode::Help => Style::default().fg(Color::Black).bg(Color::Yellow),
             InputMode::Logs => Style::default().fg(Color::Black).bg(Color::Green),
+            InputMode::Tags => Style::default().fg(Color::Black).bg(Color::Magenta),
         };
 
         let mode_text = format!(" {} ", self.mode.indicator());
@@ -142,7 +143,7 @@ impl<'a> HelpBar<'a> {
                 ("yy", "yank"),
                 ("dd", "delete"),
                 ("/", "search"),
-                (":", "command"),
+                (":", "cmd"),
                 ("?", "help"),
             ],
             InputMode::Insert => vec![
@@ -163,6 +164,11 @@ impl<'a> HelpBar<'a> {
                 ("j/k", "scroll"),
             ],
             InputMode::Logs => vec![
+                ("j/k", "scroll"),
+                ("Ctrl-d/u", "page"),
+                ("q", "close"),
+            ],
+            InputMode::Tags => vec![
                 ("j/k", "scroll"),
                 ("Ctrl-d/u", "page"),
                 ("q", "close"),

@@ -22,7 +22,7 @@ use crate::input::keymap::{
 use crate::input::modes::{InputMode, ModeState};
 use crate::ui::components::{CredentialDetail, CredentialForm, CredentialItem, ListViewState, LogsState, MessageType};
 use crate::ui::renderer::{Renderer, UiState, View};
-use crate::ui::components::popup::{HelpState, HelpScreen, LogsScreen};
+use crate::ui::components::popup::{HelpState, HelpScreen, LogsScreen, TagsState, TagsPopup};
 use crate::vault::credential::DecryptedCredential;
 use crate::vault::manager::VaultState;
 use crate::vault::{audit, Vault};
@@ -79,6 +79,7 @@ pub struct App {
     pub wants_password_change: bool,
     pub help_state: HelpState,
     pub logs_state: LogsState,
+    pub tags_state: TagsState,
 }
 
 impl App {
@@ -104,6 +105,7 @@ impl App {
             wants_password_change: false,
             help_state: HelpState::new(),
             logs_state: LogsState::new(),
+            tags_state: TagsState::new(),
         }
     }
 
@@ -204,6 +206,12 @@ impl App {
         Ok(())
     }
 
+    /// Load tags into tags_state
+    fn load_tags(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.tags_state.set_tags_from_credentials(&self.credentials);
+        Ok(())
+    }
+
     /// Refresh data from vault
     pub fn refresh_data(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let db = self.vault.db()?;
@@ -261,6 +269,7 @@ impl App {
             credential_form: self.credential_form.as_ref(),
             help_state: &self.help_state,
             logs_state: &self.logs_state,
+            tags_state: &self.tags_state,
         };
 
         Renderer::render(frame, &mut state);
@@ -313,37 +322,54 @@ impl App {
                     }
                     // Vertical scrolling
                     (KeyCode::Char('j'), KeyModifiers::NONE) | (KeyCode::Down, _) => {
+                        self.help_state.scroll.pending_g = false;
                         self.help_state.scroll_down(1, max_v);
                     }
                     (KeyCode::Char('k'), KeyModifiers::NONE) | (KeyCode::Up, _) => {
+                        self.help_state.scroll.pending_g = false;
                         self.help_state.scroll_up(1);
                     }
+                    // gg sequence for go to top
                     (KeyCode::Char('g'), KeyModifiers::NONE) => {
-                        self.help_state.home();
+                        if self.help_state.scroll.pending_g {
+                            self.help_state.home();
+                            self.help_state.scroll.pending_g = false;
+                        } else {
+                            self.help_state.scroll.pending_g = true;
+                        }
                     }
                     (KeyCode::Char('G'), KeyModifiers::SHIFT) => {
+                        self.help_state.scroll.pending_g = false;
                         self.help_state.end(max_v);
                     }
                     (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+                        self.help_state.scroll.pending_g = false;
                         self.help_state.scroll_down(10, max_v);
                     }
                     (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
+                        self.help_state.scroll.pending_g = false;
                         self.help_state.scroll_up(10);
                     }
                     // Horizontal scrolling (for single-column mode on narrow terminals)
                     (KeyCode::Char('h'), KeyModifiers::NONE) | (KeyCode::Left, _) => {
+                        self.help_state.scroll.pending_g = false;
                         self.help_state.scroll_left(5);
                     }
                     (KeyCode::Char('l'), KeyModifiers::NONE) | (KeyCode::Right, _) => {
+                        self.help_state.scroll.pending_g = false;
                         self.help_state.scroll_right(5, max_h);
                     }
                     (KeyCode::Char('0'), KeyModifiers::NONE) => {
+                        self.help_state.scroll.pending_g = false;
                         self.help_state.h_home();
                     }
                     (KeyCode::Char('$'), _) => {
+                        self.help_state.scroll.pending_g = false;
                         self.help_state.h_end(max_h);
                     }
-                    _ => {}
+                    _ => {
+                        self.help_state.scroll.pending_g = false;
+                    }
                 }
                 return Ok(false);
             }
@@ -362,37 +388,118 @@ impl App {
                     }
                     // Vertical scrolling
                     (KeyCode::Char('j'), KeyModifiers::NONE) | (KeyCode::Down, _) => {
+                        self.logs_state.scroll.pending_g = false;
                         self.logs_state.scroll_down(1, max_v);
                     }
                     (KeyCode::Char('k'), KeyModifiers::NONE) | (KeyCode::Up, _) => {
+                        self.logs_state.scroll.pending_g = false;
                         self.logs_state.scroll_up(1);
                     }
+                    // gg sequence for go to top
                     (KeyCode::Char('g'), KeyModifiers::NONE) => {
-                        self.logs_state.home();
+                        if self.logs_state.scroll.pending_g {
+                            self.logs_state.home();
+                            self.logs_state.scroll.pending_g = false;
+                        } else {
+                            self.logs_state.scroll.pending_g = true;
+                        }
                     }
                     (KeyCode::Char('G'), KeyModifiers::SHIFT) => {
+                        self.logs_state.scroll.pending_g = false;
                         self.logs_state.end(max_v);
                     }
                     (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+                        self.logs_state.scroll.pending_g = false;
                         self.logs_state.scroll_down(10, max_v);
                     }
                     (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
+                        self.logs_state.scroll.pending_g = false;
                         self.logs_state.scroll_up(10);
                     }
                     // Horizontal scrolling
                     (KeyCode::Char('h'), KeyModifiers::NONE) | (KeyCode::Left, _) => {
+                        self.logs_state.scroll.pending_g = false;
                         self.logs_state.scroll_left(5);
                     }
                     (KeyCode::Char('l'), KeyModifiers::NONE) | (KeyCode::Right, _) => {
+                        self.logs_state.scroll.pending_g = false;
                         self.logs_state.scroll_right(5, max_h);
                     }
                     (KeyCode::Char('0'), KeyModifiers::NONE) => {
+                        self.logs_state.scroll.pending_g = false;
                         self.logs_state.h_home();
                     }
                     (KeyCode::Char('$'), _) => {
+                        self.logs_state.scroll.pending_g = false;
                         self.logs_state.h_end(max_h);
                     }
-                    _ => {}
+                    _ => {
+                        self.logs_state.scroll.pending_g = false;
+                    }
+                }
+                return Ok(false);
+            }
+            InputMode::Tags => {
+                match (key.code, key.modifiers) {
+                    // Close
+                    (KeyCode::Char('t'), KeyModifiers::NONE) |
+                    (KeyCode::Char('q'), KeyModifiers::NONE) |
+                    (KeyCode::Esc, _) => {
+                        self.mode_state.to_normal();
+                        return Ok(false);
+                    }
+                    // Navigation
+                    (KeyCode::Char('j'), KeyModifiers::NONE) | (KeyCode::Down, _) => {
+                        self.tags_state.scroll.pending_g = false;
+                        self.tags_state.scroll_down();
+                    }
+                    (KeyCode::Char('k'), KeyModifiers::NONE) | (KeyCode::Up, _) => {
+                        self.tags_state.scroll.pending_g = false;
+                        self.tags_state.scroll_up();
+                    }
+                    // Half-page scrolling
+                    (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+                        self.tags_state.scroll.pending_g = false;
+                        self.tags_state.page_down(5);
+                    }
+                    (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
+                        self.tags_state.scroll.pending_g = false;
+                        self.tags_state.page_up(5);
+                    }
+                    // gg sequence for go to top
+                    (KeyCode::Char('g'), KeyModifiers::NONE) => {
+                        if self.tags_state.scroll.pending_g {
+                            self.tags_state.home();
+                            self.tags_state.scroll.pending_g = false;
+                        } else {
+                            self.tags_state.scroll.pending_g = true;
+                        }
+                    }
+                    (KeyCode::Char('G'), KeyModifiers::SHIFT) => {
+                        self.tags_state.scroll.pending_g = false;
+                        self.tags_state.end();
+                    }
+                    // Toggle tag selection with Space
+                    (KeyCode::Char(' '), KeyModifiers::NONE) => {
+                        self.tags_state.scroll.pending_g = false;
+                        self.tags_state.toggle_selected();
+                    }
+                    // Filter by selected tag(s)
+                    (KeyCode::Enter, _) | (KeyCode::Char('l'), KeyModifiers::NONE) => {
+                        self.tags_state.scroll.pending_g = false;
+                        let tags = if self.tags_state.has_selection() {
+                            self.tags_state.get_selected_tags()
+                        } else if let Some(tag) = self.tags_state.selected_tag() {
+                            vec![tag.to_string()]
+                        } else {
+                            return Ok(false);
+                        };
+                        self.mode_state.to_normal();
+                        self.filter_by_tag(&tags)?;
+                    }
+                    _ => {
+                        self.tags_state.scroll.pending_g = false;
+                    }
                 }
                 return Ok(false);
             }
@@ -604,7 +711,17 @@ impl App {
             }
             Action::ShowHelp => {
                 self.help_state.home();
+                self.help_state.scroll.pending_g = false;
                 self.mode_state.to_help();
+            }
+            Action::ShowTags => {
+                if self.vault.is_unlocked() {
+                    self.load_tags()?;
+                    self.tags_state.scroll.pending_g = false;
+                    self.mode_state.to_tags();
+                } else {
+                    self.set_message("Vault must be unlocked", MessageType::Error);
+                }
             }
             Action::ChangePassword => {
                 if self.vault.is_unlocked() {
@@ -699,6 +816,7 @@ impl App {
                 return self.execute_action(parsed);
             }
             Action::Search(query) => self.search_credentials(&query)?,
+            Action::FilterByTag(tag) => self.filter_by_tag(&[tag])?,
 
             Action::GeneratePassword => {
                 let password = crate::crypto::generate_password(&crate::crypto::PasswordPolicy::default());
@@ -728,6 +846,7 @@ impl App {
                 if self.vault.is_unlocked() {
                     match self.load_audit_logs() {
                         Ok(()) => {
+                            self.logs_state.scroll.pending_g = false;
                             self.mode_state.to_logs();
                         }
                         Err(e) => {
@@ -765,6 +884,25 @@ impl App {
         }
 
         Ok(false)
+    }
+
+    /// Filter credentials by tags (AND logic - must have all tags)
+    fn filter_by_tag(&mut self, tags: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+        let db = self.vault.db()?;
+        let results = crate::db::get_credentials_by_tag(db.conn(), tags)?;
+        self.credential_items = results
+            .iter()
+            .map(|c| self.credential_to_item(c))
+            .collect();
+        self.credentials = results;
+        self.list_state.set_total(self.credential_items.len());
+        let msg = if tags.len() == 1 {
+            format!("Filtered by tag: {}", tags[0])
+        } else {
+            format!("Filtered by tags: {}", tags.join(", "))
+        };
+        self.set_message(&msg, MessageType::Info);
+        Ok(())
     }
 
     /// Decrypt credential and store in self.selected_detail and self.selected_credential

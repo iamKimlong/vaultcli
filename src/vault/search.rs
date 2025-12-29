@@ -50,7 +50,7 @@ pub fn search(conn: &rusqlite::Connection, query: &str) -> VaultResult<SearchRes
 
 /// Search credentials by tag
 pub fn search_by_tag(conn: &rusqlite::Connection, tag: &str) -> VaultResult<SearchResults> {
-    let credentials = db::get_credentials_by_tag(conn, tag)?;
+    let credentials = db::get_credentials_by_tag(conn, &[tag.to_string()])?;
     Ok(SearchResults::new(credentials, Some(format!("tag:{}", tag))))
 }
 

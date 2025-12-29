@@ -76,6 +76,7 @@ impl InputHandler {
             InputMode::Confirm => confirm_action(key),
             InputMode::Help => help_action(key),
             InputMode::Logs => Action::None,
+            InputMode::Tags => Action::None,
         }
     }
 }

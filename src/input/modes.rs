@@ -19,6 +19,8 @@ pub enum InputMode {
     Help,
     /// Logs screen
     Logs,
+    /// Tags screen
+    Tags,
 }
 
 impl InputMode {
@@ -32,6 +34,7 @@ impl InputMode {
             Self::Confirm => "CONFIRM",
             Self::Help => "HELP",
             Self::Logs => "LOG",
+            Self::Tags => "TAG",
         }
     }
 
@@ -107,6 +110,11 @@ impl ModeState {
     /// Switch to help mode
     pub fn to_help(&mut self) {
         self.set_mode(InputMode::Help);
+    }
+
+    /// Switch to tag mode
+    pub fn to_tags(&mut self) {
+        self.mode = InputMode::Tags;
     }
 
     /// Switch to log mode

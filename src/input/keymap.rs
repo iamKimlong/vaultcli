@@ -38,10 +38,12 @@ pub enum Action {
     EnterCommand,
     EnterSearch,
     ShowHelp,
+    ShowTags,
 
     // Commands
     ExecuteCommand(String),
     Search(String),
+    FilterByTag(String),
     GeneratePassword,
     ChangePassword,
     VerifyAudit,
@@ -72,6 +74,14 @@ pub enum Action {
     // No action
     None,
     Invalid(String),
+}
+
+/// Pending key state for multi-key sequences
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PendingKey {
+    G,  // waiting for second 'g' for gg
+    D,  // waiting for second 'd' for dd
+    Y,  // waiting for second key for yank
 }
 
 /// Map key event to action in normal mode
@@ -112,7 +122,7 @@ pub fn normal_mode_action(key: KeyEvent, pending: Option<char>) -> (Action, Opti
         (KeyCode::Char('y'), KeyModifiers::NONE, Some('y')) => (Action::CopyPassword, None),
         (KeyCode::Char('c'), KeyModifiers::NONE, Some('y')) => (Action::CopyPassword, None),
         (KeyCode::Char('u'), KeyModifiers::NONE, None) => (Action::CopyUsername, None),
-        (KeyCode::Char('t'), KeyModifiers::NONE, _) => (Action::CopyTotp, None),
+        (KeyCode::Char('T'), KeyModifiers::SHIFT, _) => (Action::CopyTotp, None),
 
         // View
         (KeyCode::Char('s'), KeyModifiers::CONTROL, _) => (Action::TogglePasswordVisibility, None),
@@ -121,6 +131,7 @@ pub fn normal_mode_action(key: KeyEvent, pending: Option<char>) -> (Action, Opti
         (KeyCode::Char(':'), KeyModifiers::NONE | KeyModifiers::SHIFT, _) => (Action::EnterCommand, None),
         (KeyCode::Char('/'), KeyModifiers::NONE, _) => (Action::EnterSearch, None),
         (KeyCode::Char('?'), KeyModifiers::NONE | KeyModifiers::SHIFT, _) => (Action::ShowHelp, None),
+        (KeyCode::Char('t'), KeyModifiers::NONE, _) => (Action::ShowTags, None),
 
         // Application
         (KeyCode::Char('q'), KeyModifiers::NONE, _) => (Action::Quit, None),
@@ -175,7 +186,7 @@ pub fn parse_command(cmd: &str) -> Action {
     let cmd = cmd.trim();
     let parts: Vec<&str> = cmd.splitn(2, ' ').collect();
     let command = parts[0];
-    let _args = parts.get(1).copied();
+    let args = parts.get(1).copied();
 
     match command {
         "cls" | "clear" => Action::Clear,
@@ -193,6 +204,7 @@ pub fn parse_command(cmd: &str) -> Action {
         "refresh" => Action::Refresh,
         "logs" | "log" => Action::ShowLogs,
         "audit" | "verify" => Action::VerifyAudit,
+        "tags" | "tag" => Action::ShowTags,
         "" => Action::None,
         other => Action::Invalid(other.to_string()),
     }
@@ -261,6 +273,7 @@ mod tests {
         assert_eq!(parse_command("q!"), Action::ForceQuit);
         assert_eq!(parse_command("new"), Action::New);
         assert_eq!(parse_command("help"), Action::ShowHelp);
+        assert_eq!(parse_command("tags"), Action::ShowTags);
     }
 
     #[test]
@@ -269,5 +282,11 @@ mod tests {
         assert_eq!(confirm_action(key(KeyCode::Char('n'))), Action::Cancel);
         assert_eq!(confirm_action(key(KeyCode::Enter)), Action::Confirm);
         assert_eq!(confirm_action(key(KeyCode::Esc)), Action::Cancel);
+    }
+
+    #[test]
+    fn test_show_tags() {
+        let (action, _) = normal_mode_action(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE), None);
+        assert_eq!(action, Action::ShowTags);
     }
 }

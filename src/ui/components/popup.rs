@@ -9,7 +9,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, BorderType, Clear, Paragraph, Widget, Wrap},
 };
-use crate::db::AuditLog;
+use crate::db::{AuditLog, Credential};
 
 /// Centered rectangle helper
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -269,6 +269,7 @@ impl Widget for PasswordDialog<'_> {
 pub struct ScrollState {
     pub v_scroll: usize,
     pub h_scroll: usize,
+    pub pending_g: bool,
 }
 
 impl ScrollState {
@@ -279,6 +280,7 @@ impl ScrollState {
     pub fn reset(&mut self) {
         self.v_scroll = 0;
         self.h_scroll = 0;
+        self.pending_g = false;
     }
 
     pub fn scroll_up(&mut self, amount: usize) {
@@ -311,6 +313,238 @@ impl ScrollState {
 
     pub fn h_end(&mut self, max: usize) {
         self.h_scroll = max;
+    }
+}
+
+/// Tags popup state
+#[derive(Default)]
+pub struct TagsState {
+    pub scroll: ScrollState,
+    pub tags: Vec<(String, usize)>, // (tag_name, count)
+    pub selected: usize,
+    pub selected_tags: std::collections::HashSet<String>,
+}
+
+impl TagsState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set tags from credentials - aggregates and counts
+    pub fn set_tags_from_credentials(&mut self, credentials: &[Credential]) {
+        use std::collections::HashMap;
+        
+        let mut tag_counts: HashMap<String, usize> = HashMap::new();
+        for cred in credentials {
+            for tag in &cred.tags {
+                *tag_counts.entry(tag.clone()).or_insert(0) += 1;
+            }
+        }
+
+        let mut tags: Vec<_> = tag_counts.into_iter().collect();
+        tags.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0))); // Sort by count desc, then name
+        
+        self.tags = tags;
+        self.scroll.reset();
+        self.selected = 0;
+        self.selected_tags.clear();
+    }
+
+    pub fn scroll_up(&mut self) {
+        if self.selected > 0 {
+            self.selected -= 1;
+        }
+    }
+
+    pub fn scroll_down(&mut self) {
+        if self.selected < self.tags.len().saturating_sub(1) {
+            self.selected += 1;
+        }
+    }
+
+    pub fn page_up(&mut self, amount: usize) {
+        self.selected = self.selected.saturating_sub(amount);
+    }
+
+    pub fn page_down(&mut self, amount: usize) {
+        self.selected = (self.selected + amount).min(self.tags.len().saturating_sub(1));
+    }
+
+    pub fn home(&mut self) {
+        self.selected = 0;
+    }
+
+    pub fn end(&mut self) {
+        self.selected = self.tags.len().saturating_sub(1);
+    }
+
+    pub fn selected_tag(&self) -> Option<&str> {
+        self.tags.get(self.selected).map(|(t, _)| t.as_str())
+    }
+
+    pub fn toggle_selected(&mut self) {
+        if let Some((tag, _)) = self.tags.get(self.selected) {
+            if self.selected_tags.contains(tag) {
+                self.selected_tags.remove(tag);
+            } else {
+                self.selected_tags.insert(tag.clone());
+            }
+        }
+    }
+
+    pub fn get_selected_tags(&self) -> Vec<String> {
+        self.selected_tags.iter().cloned().collect()
+    }
+
+    pub fn has_selection(&self) -> bool {
+        !self.selected_tags.is_empty()
+    }
+
+    /// Calculate max scroll given visible height
+    pub fn max_scroll(&self, visible_height: u16) -> usize {
+        self.tags.len().saturating_sub(visible_height as usize)
+    }
+}
+
+/// Tags popup widget
+pub struct TagsPopup<'a> {
+    state: &'a TagsState,
+}
+
+impl<'a> TagsPopup<'a> {
+    pub fn new(state: &'a TagsState) -> Self {
+        Self { state }
+    }
+
+    /// Calculate visible height for the tags popup
+    pub fn visible_height(area: Rect) -> u16 {
+        let popup = centered_rect_fixed(50, 20, area);
+        popup.height.saturating_sub(4) // borders + header + separator
+    }
+}
+
+impl Widget for TagsPopup<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let height = (self.state.tags.len() as u16 + 4).min(20).max(8);
+        let popup = centered_rect_fixed(55, height, area);
+
+        Clear.render(popup, buf);
+
+        let block = Block::default()
+            .title(" Tags ")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Magenta))
+            .style(Style::default().bg(Color::Black));
+
+        let inner = block.inner(popup);
+        block.render(popup, buf);
+
+        if self.state.tags.is_empty() {
+            let msg = Paragraph::new("No tags found")
+                .style(Style::default().fg(Color::DarkGray));
+            msg.render(inner, buf);
+            return;
+        }
+
+        // Header - TAG left-aligned, COUNT right-aligned
+        buf.set_string(
+            inner.x,
+            inner.y,
+            "TAG",
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        );
+        let count_header = "COUNT";
+        buf.set_string(
+            inner.x + inner.width - count_header.len() as u16,
+            inner.y,
+            count_header,
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        );
+
+        // Separator
+        for x in inner.x..inner.x + inner.width {
+            buf.set_string(x, inner.y + 1, "─", Style::default().fg(Color::DarkGray));
+        }
+
+        // Calculate scroll offset to keep selected visible
+        let content_height = inner.height.saturating_sub(2) as usize;
+        let scroll_offset = if self.state.selected >= content_height {
+            self.state.selected - content_height + 1
+        } else {
+            0
+        };
+
+        // Tags list
+        let content_y = inner.y + 2;
+        for (i, (tag, count)) in self.state.tags.iter().enumerate().skip(scroll_offset) {
+            let row = i - scroll_offset;
+            if row >= content_height {
+                break;
+            }
+
+            let y = content_y + row as u16;
+            let is_cursor = i == self.state.selected;
+            let is_checked = self.state.selected_tags.contains(tag);
+
+            let style = if is_cursor {
+                Style::default().bg(Color::DarkGray).fg(Color::White)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            // Clear line for selection highlight
+            if is_cursor {
+                for x in inner.x..inner.x + inner.width {
+                    if let Some(cell) = buf.cell_mut((x, y)) {
+                        cell.set_bg(Color::DarkGray);
+                    }
+                }
+            }
+
+            // Checkbox indicator
+            let checkbox = if is_checked { "󰗠 " } else { "󰄰 " };
+            buf.set_string(
+                inner.x,
+                y,
+                checkbox,
+                if is_cursor {
+                    Style::default().bg(Color::DarkGray).fg(Color::Green)
+                } else {
+                    Style::default().fg(Color::Green)
+                },
+            );
+
+            // Tag name (truncate if needed, accounting for checkbox and count)
+            let checkbox_width = 2u16;
+            let count_width = 6u16;
+            let max_tag_width = (inner.width as usize).saturating_sub((checkbox_width + count_width) as usize);
+            let display_tag: String = if tag.len() > max_tag_width {
+                format!("{}…", &tag[..max_tag_width.saturating_sub(1)])
+            } else {
+                tag.clone()
+            };
+            buf.set_string(inner.x + checkbox_width, y, &display_tag, style);
+
+            // Count (right-aligned)
+            let count_str = format!("{:>5}", count);
+            buf.set_string(
+                inner.x + inner.width - 5,
+                y,
+                &count_str,
+                if is_cursor {
+                    Style::default().bg(Color::DarkGray).fg(Color::Cyan)
+                } else {
+                    Style::default().fg(Color::Cyan)
+                },
+            );
+        }
+
+        // Footer
+        let footer = " j/k nav - Space select - Enter filter - q close ";
+        let footer_y = popup.y + popup.height - 1;
+        let footer_x = popup.x + (popup.width.saturating_sub(footer.len() as u16)) / 2;
+        buf.set_string(footer_x, footer_y, footer, Style::default().fg(Color::DarkGray));
     }
 }
 
@@ -495,9 +729,9 @@ impl Widget for LogsScreen<'_> {
 
         // Render footer
         let footer_text = if needs_h_scroll {
-            " j/k scroll • h/l pan • 0/$ pan start/end • q close "
+            " j/k scroll - h/l pan - 0/$ pan start/end - q close "
         } else {
-            " j/k scroll • g/G top/bottom • q close "
+            " j/k scroll - gg/G top/bottom - q close "
         };
         let footer_y = popup.y + popup.height - 1;
         let footer_x = popup.x + (popup.width.saturating_sub(footer_text.len() as u16)) / 2;
@@ -725,7 +959,7 @@ impl<'a> HelpScreen<'a> {
         let mut max_width = 0usize;
         for (header, bindings) in &sections {
             max_width = max_width.max(header.len());
-            for (key, desc) in bindings {
+            for (_key, desc) in bindings {
                 // 4 indent + key + gap to 16 + desc
                 let line_width = 16 + desc.len();
                 max_width = max_width.max(line_width);
@@ -767,7 +1001,7 @@ impl<'a> HelpScreen<'a> {
     }
 }
 
-const TWO_COLUMN_MIN_WIDTH: u16 = 80;
+const TWO_COLUMN_MIN_WIDTH: u16 = 85;
 
 impl Widget for HelpScreen<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
@@ -790,9 +1024,9 @@ impl Widget for HelpScreen<'_> {
 
         // Render footer
         let footer_text = if needs_h_scroll {
-            " j/k scroll • h/l pan • g/G top/bottom • q close "
+            " j/k scroll - h/l pan - gg/G top/bottom - q close "
         } else {
-            " j/k scroll • g/G top/bottom • q close "
+            " j/k scroll - gg/G top/bottom - q close "
         };
         let footer_y = popup.y + popup.height - 1;
         let footer_x = popup.x + (popup.width.saturating_sub(footer_text.len() as u16)) / 2;
@@ -981,7 +1215,7 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
             vec![
                 ("yy / c", "Copy password/secret"),
                 ("u", "Copy username"),
-                ("t", "Copy TOTP code"),
+                ("T", "Copy TOTP code"),
             ],
         ),
         (
@@ -989,6 +1223,7 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
             vec![
                 ("Ctrl+s", "Toggle password"),
                 ("/", "Search"),
+                ("t", "Show tags"),
             ],
         ),
         (
@@ -1000,6 +1235,7 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
                 (":changepw", "Change master key"),
                 (":audit", "Verify audit log integrity"),
                 (":log", "View logs"),
+                (":tag", "View tags"),
                 (":new", "New credential"),
                 (":gen", "Generate password"),
             ],
@@ -1011,6 +1247,7 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
                 ("Ctrl+l", "Clear message"),
                 ("Ctrl+p", "Change master key"),
                 ("L", "Lock vault"),
+                ("t", "View tags"),
                 ("i", "View logs"),
                 ("q", "Quit"),
             ],
