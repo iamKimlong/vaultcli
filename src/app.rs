@@ -22,7 +22,7 @@ use crate::input::keymap::{
 use crate::input::modes::{InputMode, ModeState};
 use crate::ui::components::{CredentialDetail, CredentialForm, CredentialItem, ListViewState, LogsState, MessageType};
 use crate::ui::renderer::{Renderer, UiState, View};
-use crate::ui::components::popup::{HelpState, HelpScreen, LogsScreen, TagsState};
+use crate::ui::components::popup::{HelpState, HelpScreen, LogsScreen, TagsState, TagsPopup};
 use crate::vault::credential::DecryptedCredential;
 use crate::vault::manager::VaultState;
 use crate::vault::{audit, Vault};
@@ -310,6 +310,7 @@ impl App {
             }
             InputMode::Confirm => confirm_action(key),
             InputMode::Help => {
+                let visible = HelpScreen::visible_height(self.terminal_size) as usize;
                 let max_v = HelpScreen::max_scroll(self.terminal_size);
                 let max_h = HelpScreen::max_h_scroll(self.terminal_size);
                 match (key.code, key.modifiers) {
@@ -348,13 +349,23 @@ impl App {
                         self.help_state.scroll.pending_g = false;
                         self.help_state.end(max_v);
                     }
+                    // Half-page scrolling
                     (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
                         self.help_state.scroll.pending_g = false;
-                        self.help_state.scroll_down(10, max_v);
+                        self.help_state.page_down(visible / 2, max_v);
                     }
                     (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
                         self.help_state.scroll.pending_g = false;
-                        self.help_state.scroll_up(10);
+                        self.help_state.page_up(visible / 2);
+                    }
+                    // Full-page scrolling
+                    (KeyCode::Char('f'), KeyModifiers::CONTROL) => {
+                        self.help_state.scroll.pending_g = false;
+                        self.help_state.page_down(visible.saturating_sub(1), max_v);
+                    }
+                    (KeyCode::Char('b'), KeyModifiers::CONTROL) => {
+                        self.help_state.scroll.pending_g = false;
+                        self.help_state.page_up(visible.saturating_sub(1));
                     }
                     // Horizontal scrolling (for single-column mode on narrow terminals)
                     (KeyCode::Char('h'), KeyModifiers::NONE) | (KeyCode::Left, _) => {
@@ -380,8 +391,8 @@ impl App {
                 return Ok(false);
             }
             InputMode::Logs => {
-                let visible = LogsScreen::visible_height(self.terminal_size);
-                let max_v = self.logs_state.max_scroll(visible);
+                let visible = LogsScreen::visible_height(self.terminal_size) as usize;
+                let max_v = self.logs_state.max_scroll(visible as u16);
                 let visible_width = LogsScreen::visible_width(self.terminal_size);
                 let max_h = self.logs_state.max_h_scroll(visible_width);
                 match (key.code, key.modifiers) {
@@ -420,13 +431,23 @@ impl App {
                         self.logs_state.scroll.pending_g = false;
                         self.logs_state.end(max_v);
                     }
+                    // Half-page scrolling
                     (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
                         self.logs_state.scroll.pending_g = false;
-                        self.logs_state.scroll_down(10, max_v);
+                        self.logs_state.page_down(visible / 2, max_v);
                     }
                     (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
                         self.logs_state.scroll.pending_g = false;
-                        self.logs_state.scroll_up(10);
+                        self.logs_state.page_up(visible / 2);
+                    }
+                    // Full-page scrolling
+                    (KeyCode::Char('f'), KeyModifiers::CONTROL) => {
+                        self.logs_state.scroll.pending_g = false;
+                        self.logs_state.page_down(visible.saturating_sub(1), max_v);
+                    }
+                    (KeyCode::Char('b'), KeyModifiers::CONTROL) => {
+                        self.logs_state.scroll.pending_g = false;
+                        self.logs_state.page_up(visible.saturating_sub(1));
                     }
                     // Horizontal scrolling
                     (KeyCode::Char('h'), KeyModifiers::NONE) | (KeyCode::Left, _) => {
@@ -452,6 +473,7 @@ impl App {
                 return Ok(false);
             }
             InputMode::Tags => {
+                let visible = TagsPopup::visible_height(self.terminal_size) as usize;
                 match (key.code, key.modifiers) {
                     // Close
                     (KeyCode::Char('t'), KeyModifiers::NONE) |
@@ -478,11 +500,20 @@ impl App {
                     // Half-page scrolling
                     (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
                         self.tags_state.scroll.pending_g = false;
-                        self.tags_state.page_down(5);
+                        self.tags_state.page_down(visible / 2);
                     }
                     (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
                         self.tags_state.scroll.pending_g = false;
-                        self.tags_state.page_up(5);
+                        self.tags_state.page_up(visible / 2);
+                    }
+                    // Full-page scrolling
+                    (KeyCode::Char('f'), KeyModifiers::CONTROL) => {
+                        self.tags_state.scroll.pending_g = false;
+                        self.tags_state.page_down(visible.saturating_sub(1));
+                    }
+                    (KeyCode::Char('b'), KeyModifiers::CONTROL) => {
+                        self.tags_state.scroll.pending_g = false;
+                        self.tags_state.page_up(visible.saturating_sub(1));
                     }
                     // gg sequence for go to top
                     (KeyCode::Char('g'), KeyModifiers::NONE) => {
@@ -694,6 +725,10 @@ impl App {
         }
     }
 
+    fn list_visible_height(&self) -> usize {
+        (self.terminal_size.height as usize).saturating_sub(4)
+    }
+
     fn execute_action(&mut self, action: Action) -> Result<bool, Box<dyn std::error::Error>> {
         match action {
             Action::MoveUp => {
@@ -713,19 +748,23 @@ impl App {
                 self.update_selected_detail()?;
             }
             Action::PageUp => {
-                self.list_state.page_up(10);
+                let visible = self.list_visible_height();
+                self.list_state.page_up(visible.saturating_sub(1));
                 self.update_selected_detail()?;
             }
             Action::PageDown => {
-                self.list_state.page_down(10);
+                let visible = self.list_visible_height();
+                self.list_state.page_down(visible.saturating_sub(1));
                 self.update_selected_detail()?;
             }
             Action::HalfPageUp => {
-                self.list_state.page_up(5);
+                let visible = self.list_visible_height();
+                self.list_state.page_up(visible / 2);
                 self.update_selected_detail()?;
             }
             Action::HalfPageDown => {
-                self.list_state.page_down(5);
+                let visible = self.list_visible_height();
+                self.list_state.page_down(visible / 2);
                 self.update_selected_detail()?;
             }
             Action::ShowHelp => {

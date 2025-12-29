@@ -363,12 +363,12 @@ impl TagsState {
         }
     }
 
-    pub fn page_up(&mut self, amount: usize) {
-        self.selected = self.selected.saturating_sub(amount);
-    }
-
     pub fn page_down(&mut self, amount: usize) {
         self.selected = (self.selected + amount).min(self.tags.len().saturating_sub(1));
+    }
+
+    pub fn page_up(&mut self, amount: usize) {
+        self.selected = self.selected.saturating_sub(amount);
     }
 
     pub fn home(&mut self) {
@@ -645,6 +645,14 @@ impl LogsState {
         self.scroll.scroll_right(amount, max);
     }
 
+    pub fn page_down(&mut self, amount: usize, max: usize) {
+        self.scroll.scroll_down(amount, max);
+    }
+
+    pub fn page_up(&mut self, amount: usize) {
+        self.scroll.scroll_up(amount);
+    }
+
     pub fn home(&mut self) {
         self.scroll.home();
     }
@@ -909,6 +917,14 @@ impl HelpState {
 
     pub fn scroll_right(&mut self, amount: usize, max: usize) {
         self.scroll.scroll_right(amount, max);
+    }
+
+    pub fn page_down(&mut self, amount: usize, max: usize) {
+        self.scroll.scroll_down(amount, max);
+    }
+
+    pub fn page_up(&mut self, amount: usize) {
+        self.scroll.scroll_up(amount);
     }
 
     pub fn home(&mut self) {
@@ -1202,6 +1218,8 @@ fn help_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
                 ("G", "Go to bottom"),
                 ("Ctrl-d", "Half page down"),
                 ("Ctrl-u", "Half page up"),
+                ("Ctrl-f", "Page down"),
+                ("Ctrl-b", "Page up"),
             ],
         ),
         (

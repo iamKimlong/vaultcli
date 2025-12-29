@@ -97,6 +97,8 @@ pub fn normal_mode_action(key: KeyEvent, pending: Option<char>) -> (Action, Opti
         (KeyCode::Char('G'), KeyModifiers::SHIFT, _) => (Action::MoveToBottom, None),
         (KeyCode::Char('d'), KeyModifiers::CONTROL, _) => (Action::HalfPageDown, None),
         (KeyCode::Char('u'), KeyModifiers::CONTROL, _) => (Action::HalfPageUp, None),
+        (KeyCode::Char('f'), KeyModifiers::CONTROL, _) => (Action::PageDown, None),
+        (KeyCode::Char('b'), KeyModifiers::CONTROL, _) => (Action::PageUp, None),
         (KeyCode::PageDown, _, _) => (Action::PageDown, None),
         (KeyCode::PageUp, _, _) => (Action::PageUp, None),
 
