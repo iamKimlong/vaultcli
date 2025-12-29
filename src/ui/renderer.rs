@@ -195,4 +195,12 @@ impl Renderer {
             frame.render_widget(dialog, area);
         }
     }
+
+    pub fn hex_color(rgb: u32) -> Color {
+        Color::Rgb(
+            ((rgb >> 16) & 0xFF) as u8,
+            ((rgb >> 8) & 0xFF) as u8,
+            (rgb & 0xFF) as u8,
+        )
+    }
 }
