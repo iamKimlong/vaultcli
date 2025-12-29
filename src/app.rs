@@ -22,7 +22,7 @@ use crate::input::keymap::{
 use crate::input::modes::{InputMode, ModeState};
 use crate::ui::components::{CredentialDetail, CredentialForm, CredentialItem, ListViewState, LogsState, MessageType};
 use crate::ui::renderer::{Renderer, UiState, View};
-use crate::ui::components::popup::{HelpState, HelpScreen, LogsScreen, TagsState, TagsPopup};
+use crate::ui::components::popup::{HelpState, HelpScreen, LogsScreen, TagsState};
 use crate::vault::credential::DecryptedCredential;
 use crate::vault::manager::VaultState;
 use crate::vault::{audit, Vault};
@@ -320,6 +320,12 @@ impl App {
                         self.mode_state.to_normal();
                         return Ok(false);
                     }
+                    (KeyCode::Char('i'), KeyModifiers::NONE) => {
+                        return self.execute_action(Action::ShowLogs);
+                    }
+                    (KeyCode::Char('t'), KeyModifiers::NONE) => {
+                        return self.execute_action(Action::ShowTags);
+                    }
                     // Vertical scrolling
                     (KeyCode::Char('j'), KeyModifiers::NONE) | (KeyCode::Down, _) => {
                         self.help_state.scroll.pending_g = false;
@@ -386,6 +392,12 @@ impl App {
                         self.mode_state.to_normal();
                         return Ok(false);
                     }
+                    (KeyCode::Char('?'), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
+                        return self.execute_action(Action::ShowHelp);
+                    }
+                    (KeyCode::Char('t'), KeyModifiers::NONE) => {
+                        return self.execute_action(Action::ShowTags);
+                    }
                     // Vertical scrolling
                     (KeyCode::Char('j'), KeyModifiers::NONE) | (KeyCode::Down, _) => {
                         self.logs_state.scroll.pending_g = false;
@@ -448,6 +460,12 @@ impl App {
                         self.mode_state.to_normal();
                         return Ok(false);
                     }
+                    (KeyCode::Char('?'), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
+                        return self.execute_action(Action::ShowHelp);
+                    }
+                    (KeyCode::Char('i'), KeyModifiers::NONE) => {
+                        return self.execute_action(Action::ShowLogs);
+                    }
                     // Navigation
                     (KeyCode::Char('j'), KeyModifiers::NONE) | (KeyCode::Down, _) => {
                         self.tags_state.scroll.pending_g = false;
@@ -483,6 +501,7 @@ impl App {
                     (KeyCode::Char(' '), KeyModifiers::NONE) => {
                         self.tags_state.scroll.pending_g = false;
                         self.tags_state.toggle_selected();
+                        self.tags_state.scroll_down();
                     }
                     // Filter by selected tag(s)
                     (KeyCode::Enter, _) | (KeyCode::Char('l'), KeyModifiers::NONE) => {
@@ -899,7 +918,7 @@ impl App {
         let msg = if tags.len() == 1 {
             format!("Filtered by tag: {}", tags[0])
         } else {
-            format!("Filtered by tags: {}", tags.join(", "))
+            format!("Filtered by tags: {}", tags.join(" "))
         };
         self.set_message(&msg, MessageType::Info);
         Ok(())
