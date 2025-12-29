@@ -13,6 +13,7 @@ use crate::db::{AuditLog, Credential};
 
 /// Centered rectangle helper
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let content_area = Rect::new(r.x, r.y, r.width, r.height.saturating_sub(2));
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -20,8 +21,7 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage(percent_y),
             Constraint::Percentage((100 - percent_y) / 2),
         ])
-        .split(r);
-
+        .split(content_area);
     Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -33,10 +33,11 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 }
 
 /// Fixed size centered rectangle
-pub fn centered_rect_fixed(width: u16, height: u16, r: Rect) -> Rect {
+pub fn centered_rect_fixed(width: u16, height: u16, r: Rect, unlocked: bool) -> Rect {
     let x = r.x + (r.width.saturating_sub(width)) / 2;
     let y = r.y + (r.height.saturating_sub(height)) / 2;
-    Rect::new(x, y, width.min(r.width), height.min(r.height))
+    let final_y = if unlocked { y.saturating_sub(1) } else { y };
+    Rect::new(x, final_y, width.min(r.width), height.min(r.height))
 }
 
 /// Confirmation dialog
@@ -53,7 +54,7 @@ impl<'a> ConfirmDialog<'a> {
 
 impl Widget for ConfirmDialog<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let popup_area = centered_rect_fixed(50, 7, area);
+        let popup_area = centered_rect_fixed(50, 6, area, true);
 
         Clear.render(popup_area, buf);
 
@@ -123,7 +124,7 @@ impl<'a> MessagePopup<'a> {
 
 impl Widget for MessagePopup<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let popup_area = centered_rect_fixed(60, 5, area);
+        let popup_area = centered_rect_fixed(60, 5, area, true);
 
         Clear.render(popup_area, buf);
 
@@ -232,7 +233,7 @@ impl<'a> PasswordDialog<'a> {
 impl Widget for PasswordDialog<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let height = if self.error.is_some() { 7 } else { 6 };
-        let popup_area = centered_rect_fixed(50, height, area);
+        let popup_area = centered_rect_fixed(40, height, area, false);
 
         Clear.render(popup_area, buf);
 
@@ -418,15 +419,17 @@ impl<'a> TagsPopup<'a> {
 
     /// Calculate visible height for the tags popup
     pub fn visible_height(area: Rect) -> u16 {
-        let popup = centered_rect_fixed(50, 20, area);
+        let popup = centered_rect_fixed(50, 20, area, true);
         popup.height.saturating_sub(4) // borders + header + separator
     }
 }
 
 impl Widget for TagsPopup<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let height = (self.state.tags.len() as u16 + 4).min(20).max(8);
-        let popup = centered_rect_fixed(55, height, area);
+        let height = (self.state.tags.len() as u16 + 4)
+            .min((area.height * 80) / 100)
+            .max(8);
+        let popup = centered_rect_fixed(55, height, area, true);
 
         Clear.render(popup, buf);
 
