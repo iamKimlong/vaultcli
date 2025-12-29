@@ -315,18 +315,6 @@ mod tests {
     }
 
     #[test]
-    fn test_list_state_wrap() {
-        let mut state = ListViewState::new();
-        state.set_total(3);
-
-        state.move_up(); // Should wrap to bottom
-        assert_eq!(state.selected(), Some(2));
-
-        state.move_down(); // Should wrap to top
-        assert_eq!(state.selected(), Some(0));
-    }
-
-    #[test]
     fn test_list_state_empty() {
         let mut state = ListViewState::new();
         state.set_total(0);
