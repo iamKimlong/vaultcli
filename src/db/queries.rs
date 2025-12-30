@@ -272,18 +272,7 @@ pub fn get_recent_audit_logs(conn: &Connection, limit: usize) -> DbResult<Vec<Au
     )?;
 
     let logs = stmt
-        .query_map([limit], |row| {
-            Ok(AuditLog {
-                id: row.get(0)?,
-                timestamp: parse_datetime(row.get::<_, String>(1)?),
-                action: AuditAction::from_str(&row.get::<_, String>(2)?),
-                credential_id: row.get(3)?,
-                credential_name: row.get(4)?,
-                username: row.get(5)?,
-                details: row.get(6)?,
-                hmac: row.get(7)?,
-            })
-        })?
+        .query_map([limit], row_to_audit_log)?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -302,22 +291,24 @@ pub fn get_credential_audit_logs(conn: &Connection, credential_id: &str) -> DbRe
     )?;
 
     let logs = stmt
-        .query_map([credential_id], |row| {
-            Ok(AuditLog {
-                id: row.get(0)?,
-                timestamp: parse_datetime(row.get::<_, String>(1)?),
-                action: AuditAction::from_str(&row.get::<_, String>(2)?),
-                credential_id: row.get(3)?,
-                credential_name: row.get(4)?,
-                username: row.get(5)?,
-                details: row.get(6)?,
-                hmac: row.get(7)?,
-            })
-        })?
+        .query_map([credential_id], row_to_audit_log)?
         .filter_map(|r| r.ok())
         .collect();
 
     Ok(logs)
+}
+
+fn row_to_audit_log(row: &Row) -> rusqlite::Result<AuditLog> {
+    Ok(AuditLog {
+        id: row.get(0)?,
+        timestamp: parse_datetime(row.get::<_, String>(1)?),
+        action: AuditAction::from_str(&row.get::<_, String>(2)?),
+        credential_id: row.get(3)?,
+        credential_name: row.get(4)?,
+        username: row.get(5)?,
+        details: row.get(6)?,
+        hmac: row.get(7)?,
+    })
 }
 
 // ============================================================================

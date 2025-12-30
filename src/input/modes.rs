@@ -205,6 +205,25 @@ mod tests {
     }
 
     #[test]
+    fn test_command_mode_input() {
+        let mut state = ModeState::new();
+        state.to_command();
+        for c in "quit".chars() {
+            state.insert_char(c);
+        }
+        assert_eq!(state.get_buffer(), "quit");
+    }
+
+    #[test]
+    fn test_cancel_returns_to_normal() {
+        let mut state = ModeState::new();
+        state.to_command();
+        state.insert_char('x');
+        state.to_normal();
+        assert_eq!(state.mode, InputMode::Normal);
+    }
+
+    #[test]
     fn test_text_input() {
         let mut state = ModeState::new();
         state.to_insert();

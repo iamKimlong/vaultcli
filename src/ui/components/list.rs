@@ -13,7 +13,6 @@ use ratatui::{
 use crate::db::models::CredentialType;
 use crate::ui::renderer::Renderer;
 
-/// Credential display item
 #[derive(Debug, Clone)]
 pub struct CredentialItem {
     pub id: String,
@@ -23,18 +22,12 @@ pub struct CredentialItem {
     pub tags: Vec<String>,
 }
 
-/// List view state
 #[derive(Debug, Clone)]
 pub struct ListViewState {
-    /// Selected index
     pub selected: Option<usize>,
-    /// Total items
     pub total: usize,
-    /// Scroll offset
     pub offset: usize,
-    /// Current search query
     pub search: Option<String>,
-    /// Internal list state for ratatui
     list_state: ListState,
 }
 
@@ -66,15 +59,7 @@ impl ListViewState {
 
     pub fn set_total(&mut self, total: usize) {
         self.total = total;
-        if let Some(sel) = self.selected {
-            if sel >= total && total > 0 {
-                self.select(Some(total - 1));
-            } else if total == 0 {
-                self.select(None);
-            }
-        } else if total > 0 {
-            self.select(Some(0));
-        }
+        self.select(compute_selection_after_total_change(self.selected, total));
     }
 
     pub fn move_up(&mut self) {
@@ -109,10 +94,7 @@ impl ListViewState {
         if self.total == 0 {
             return;
         }
-        let new_index = match self.selected {
-            Some(i) => i.saturating_sub(page_size),
-            None => 0,
-        };
+        let new_index = self.selected.unwrap_or(0).saturating_sub(page_size);
         self.select(Some(new_index));
     }
 
@@ -120,10 +102,7 @@ impl ListViewState {
         if self.total == 0 {
             return;
         }
-        let new_index = match self.selected {
-            Some(i) => (i + page_size).min(self.total - 1),
-            None => 0,
-        };
+        let new_index = self.selected.map_or(0, |i| (i + page_size).min(self.total - 1));
         self.select(Some(new_index));
     }
 
@@ -132,7 +111,17 @@ impl ListViewState {
     }
 }
 
-/// Credential list widget
+fn compute_selection_after_total_change(selected: Option<usize>, total: usize) -> Option<usize> {
+    if total == 0 {
+        return None;
+    }
+    match selected {
+        Some(sel) if sel >= total => Some(total - 1),
+        Some(sel) => Some(sel),
+        None => Some(0),
+    }
+}
+
 pub struct CredentialList<'a> {
     items: &'a [CredentialItem],
     block: Option<Block<'a>>,
@@ -145,9 +134,7 @@ impl<'a> CredentialList<'a> {
         Self {
             items,
             block: None,
-            highlight_style: Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
+            highlight_style: Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD),
             show_username: true,
         }
     }
@@ -168,70 +155,6 @@ impl<'a> CredentialList<'a> {
     }
 }
 
-impl<'a> StatefulWidget for CredentialList<'a> {
-    type State = ListViewState;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let selected = state.selected();
-
-        let items: Vec<ListItem> = self
-            .items
-            .iter()
-            .enumerate()
-            .map(|(i, item)| {
-                let is_selected = Some(i) == selected;
-            
-                let symbol = if is_selected {
-                    Span::styled(" ", Style::default()
-                        .fg(Color::Magenta)
-                        .bg(Color::DarkGray))
-                } else {
-                    Span::raw("  ")
-                };
-
-                let icon = item.credential_type.icon();
-                let type_color = type_color(item.credential_type);
-
-                let base_style = if is_selected {
-                    self.highlight_style
-                } else {
-                    Style::default()
-                };
-
-                let mut spans = vec![
-                    symbol,
-                    Span::styled(format!("{} ", icon), base_style.fg(type_color)),
-                    Span::styled(&item.name, base_style.fg(Color::White)),
-                ];
-
-                if self.show_username {
-                    if let Some(ref username) = item.username {
-                        spans.push(Span::styled(
-                            format!(" ({})", username),
-                            base_style.fg(Renderer::hex_color(0x4C566A)),
-                        ));
-                    }
-                }
-
-                let mut list_item = ListItem::new(Line::from(spans));
-                if is_selected {
-                    list_item = list_item.style(self.highlight_style);
-                }
-                list_item
-            })
-            .collect();
-
-        let list = List::new(items);
-        let list = if let Some(block) = self.block {
-            list.block(block)
-        } else {
-            list
-        };
-
-        StatefulWidget::render(list, area, buf, state.list_state_mut());
-    }
-}
-
 fn type_color(cred_type: CredentialType) -> Color {
     match cred_type {
         CredentialType::Password => Color::Green,
@@ -245,7 +168,82 @@ fn type_color(cred_type: CredentialType) -> Color {
     }
 }
 
-/// Empty state widget
+fn build_selection_symbol(is_selected: bool) -> Span<'static> {
+    if is_selected {
+        Span::styled(" ", Style::default().fg(Color::Magenta).bg(Color::DarkGray))
+    } else {
+        Span::raw("  ")
+    }
+}
+
+fn build_item_spans<'a>(
+    item: &'a CredentialItem,
+    is_selected: bool,
+    highlight_style: Style,
+    show_username: bool,
+) -> Vec<Span<'a>> {
+    let base_style = if is_selected { highlight_style } else { Style::default() };
+    let icon = item.credential_type.icon();
+    let color = type_color(item.credential_type);
+    let mut spans = vec![
+        build_selection_symbol(is_selected),
+        Span::styled(format!("{} ", icon), base_style.fg(color)),
+        Span::styled(item.name.as_str(), base_style.fg(Color::White)),
+    ];
+    append_username_span(&mut spans, item, base_style, show_username);
+    spans
+}
+
+fn append_username_span<'a>(spans: &mut Vec<Span<'a>>, item: &'a CredentialItem, base_style: Style, show_username: bool) {
+    if !show_username { return }
+    let Some(ref username) = item.username else { return };
+    spans.push(Span::styled(
+        format!(" ({})", username),
+        base_style.fg(Renderer::hex_color(0x4C566A)),
+    ));
+}
+
+fn build_list_item<'a>(
+    item: &'a CredentialItem,
+    index: usize,
+    selected: Option<usize>,
+    highlight_style: Style,
+    show_username: bool,
+) -> ListItem<'a> {
+    let is_selected = Some(index) == selected;
+    let spans = build_item_spans(item, is_selected, highlight_style, show_username);
+    let mut list_item = ListItem::new(Line::from(spans));
+
+    if is_selected {
+        list_item = list_item.style(highlight_style);
+    }
+
+    list_item
+}
+
+impl<'a> StatefulWidget for CredentialList<'a> {
+    type State = ListViewState;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let selected = state.selected();
+
+        let items: Vec<ListItem> = self
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| build_list_item(item, i, selected, self.highlight_style, self.show_username))
+            .collect();
+
+        let list = List::new(items);
+        let list = match self.block {
+            Some(block) => list.block(block),
+            None => list,
+        };
+
+        StatefulWidget::render(list, area, buf, state.list_state_mut());
+    }
+}
+
 pub struct EmptyState<'a> {
     message: &'a str,
     hint: Option<&'a str>,
@@ -253,10 +251,7 @@ pub struct EmptyState<'a> {
 
 impl<'a> EmptyState<'a> {
     pub fn new(message: &'a str) -> Self {
-        Self {
-            message,
-            hint: None,
-        }
+        Self { message, hint: None }
     }
 
     pub fn hint(mut self, hint: &'a str) -> Self {
@@ -265,30 +260,24 @@ impl<'a> EmptyState<'a> {
     }
 }
 
+fn center_x(area: &Rect, text_len: usize) -> u16 {
+    area.x + (area.width.saturating_sub(text_len as u16)) / 2
+}
+
 impl<'a> Widget for EmptyState<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let center_y = area.y + area.height / 2;
-
-        // Message
-        let msg_x = area.x + (area.width.saturating_sub(self.message.len() as u16)) / 2;
-        buf.set_string(
-            msg_x,
-            center_y,
-            self.message,
-            Style::default().fg(Color::DarkGray),
-        );
-
-        // Hint
-        if let Some(hint) = self.hint {
-            let hint_x = area.x + (area.width.saturating_sub(hint.len() as u16)) / 2;
-            buf.set_string(
-                hint_x,
-                center_y + 1,
-                hint,
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
-            );
-        }
+        let msg_x = center_x(&area, self.message.len());
+        buf.set_string(msg_x, center_y, self.message, Style::default().fg(Color::DarkGray));
+        render_optional_hint(buf, &area, center_y, self.hint);
     }
+}
+
+fn render_optional_hint(buf: &mut Buffer, area: &Rect, center_y: u16, hint: Option<&str>) {
+    let Some(hint) = hint else { return };
+    let hint_x = center_x(area, hint.len());
+    let style = Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC);
+    buf.set_string(hint_x, center_y + 1, hint, style);
 }
 
 #[cfg(test)]

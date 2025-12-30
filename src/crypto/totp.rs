@@ -82,11 +82,7 @@ impl TotpSecret {
     }
 
     fn build_totp(&self) -> CryptoResult<TOTP> {
-        let secret =
-            Secret::Encoded(self.secret.clone()).to_bytes().map_err(|e| {
-                CryptoError::TotpFailed(format!("Invalid base32 secret: {}", e))
-            })?;
-
+        let secret = self.decode_secret()?;
         TOTP::new(
             self.algorithm.into(),
             self.digits,
@@ -97,6 +93,12 @@ impl TotpSecret {
             self.account.clone(),
         )
         .map_err(|e| CryptoError::TotpFailed(e.to_string()))
+    }
+
+    fn decode_secret(&self) -> CryptoResult<Vec<u8>> {
+        Secret::Encoded(self.secret.clone())
+            .to_bytes()
+            .map_err(|e| CryptoError::TotpFailed(format!("Invalid base32 secret: {}", e)))
     }
 }
 

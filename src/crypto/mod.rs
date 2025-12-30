@@ -74,13 +74,9 @@ impl<const N: usize> LockedBuffer<N> {
     /// Attempt to lock the memory region
     fn try_lock(&mut self) {
         self.locked = Self::mlock_impl(self.data.as_ptr(), N);
-
         #[cfg(debug_assertions)]
         if !self.locked {
-            eprintln!(
-                "Warning: mlock() failed for {} byte buffer - sensitive data may be swapped to disk",
-                N
-            );
+            eprintln!("Warning: mlock() failed for {} byte buffer - sensitive data may be swapped to disk", N);
         }
     }
 

@@ -154,24 +154,21 @@ mod tests {
     fn test_fts_index() {
         let conn = Connection::open_in_memory().unwrap();
         init_schema(&conn).unwrap();
+        insert_test_fts_credential(&conn);
+        assert!(fts_search_found(&conn, "GitHub"));
+    }
 
-        // Insert a credential
+    fn insert_test_fts_credential(conn: &Connection) {
         conn.execute(
             r#"INSERT INTO credentials (id, name, credential_type, encrypted_secret, created_at, updated_at)
-               VALUES ('test-1', 'GitHub Token', 'api_key', 'encrypted', datetime('now'), datetime('now'))"#,
+            VALUES ('test-1', 'GitHub Token', 'api_key', 'encrypted', datetime('now'), datetime('now'))"#,
             [],
         )
         .unwrap();
+    }
 
-        // Search via FTS
-        let found: bool = conn
-            .query_row(
-                "SELECT COUNT(*) > 0 FROM credentials_fts WHERE credentials_fts MATCH 'GitHub'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-
-        assert!(found);
+    fn fts_search_found(conn: &Connection, query: &str) -> bool {
+        let sql = "SELECT COUNT(*) > 0 FROM credentials_fts WHERE credentials_fts MATCH ?1";
+        conn.query_row(sql, [query], |row| row.get(0)).unwrap()
     }
 }

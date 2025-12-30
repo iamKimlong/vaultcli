@@ -5,7 +5,7 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
-    widgets::{Widget, Block, Borders, BorderType},
+    widgets::{Block, Borders, BorderType, Widget},
     Frame,
 };
 
@@ -15,9 +15,10 @@ use super::components::{
     PasswordDialog, StatusLine,
 };
 use crate::input::InputMode;
-use crate::ui::components::popup::{HelpState, LogsState, LogsScreen, TagsState, TagsPopup};
+use crate::ui::components::help::HelpState;
+use crate::ui::components::logs::{LogsScreen, LogsState};
+use crate::ui::components::tags::{TagsPopup, TagsState};
 
-/// Current view
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     List,
@@ -25,7 +26,6 @@ pub enum View {
     Form,
 }
 
-/// UI state for rendering
 pub struct UiState<'a> {
     pub view: View,
     pub mode: InputMode,
@@ -50,152 +50,9 @@ pub struct PasswordPrompt<'a> {
     pub error: Option<&'a str>,
 }
 
-/// Main renderer
 pub struct Renderer;
 
 impl Renderer {
-    pub fn render(frame: &mut Frame, state: &mut UiState) {
-        let size = frame.area();
-
-        // Main layout: content + status + help
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(3),
-                Constraint::Length(1),
-                Constraint::Length(1),
-            ])
-            .split(size);
-
-        let content_area = chunks[0];
-        let status_area = chunks[1];
-        let help_area = chunks[2];
-
-        // Render main content
-        match state.view {
-            View::List => Self::render_list(frame, content_area, state),
-            View::Detail => Self::render_detail(frame, content_area, state),
-            View::Form => Self::render_form(frame, content_area, state),
-        }
-
-        // Render status line
-        let mut status = StatusLine::new(state.mode);
-        
-        if let Some(buffer) = state.command_buffer {
-            status = status.command_buffer(buffer);
-        } else if let Some((msg, msg_type)) = state.message {
-            status = status.message(msg, msg_type);
-        }
-
-        if let Some(selected) = state.list_state.selected() {
-            status = status.item_count(selected, state.list_state.total);
-        }
-
-        frame.render_widget(status, status_area);
-
-        // Render help bar
-        let help_bar = HelpBar::for_mode(state.mode);
-        frame.render_widget(help_bar, help_area);
-
-        // Render overlays
-        Self::render_overlays(frame, size, state);
-    }
-
-    fn render_list(frame: &mut Frame, area: Rect, state: &mut UiState) {
-        if state.credentials.is_empty() {
-            let empty = EmptyState::new("No credentials")
-                .hint("Press 'n' to add one");
-            frame.render_widget(empty, area);
-        } else {
-            let block = Block::default()
-                .title(" Credentials ")
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::Magenta));
-
-            let list = CredentialList::new(state.credentials).block(block);
-            frame.render_stateful_widget(list, area, state.list_state);
-        }
-    }
-
-    fn render_detail(frame: &mut Frame, area: Rect, state: &mut UiState) {
-        // Split into list and detail
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(area);
-
-        // List on left
-        let block = Block::default()
-            .title(" Credentials ")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::DarkGray));
-
-        let list = CredentialList::new(state.credentials).block(block);
-        frame.render_stateful_widget(list, chunks[0], state.list_state);
-
-        // Detail on right
-        if let Some(detail) = state.selected_detail {
-            let detail_view = DetailView::new(detail);
-            frame.render_widget(detail_view, chunks[1]);
-        } else {
-            let empty = EmptyState::new("Select a credential");
-            frame.render_widget(empty, chunks[1]);
-        }
-    }
-
-    fn render_form(frame: &mut Frame, area: Rect, state: &mut UiState) {
-        if let Some(form) = state.credential_form {
-            let form_widget = CredentialFormWidget::new(form);
-            frame.render_widget(form_widget, area);
-        } else {
-            // Fallback - shouldn't happen
-            let block = Block::default()
-                .title(" Form ")
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::Green));
-            frame.render_widget(block, area);
-        }
-    }
-
-    fn render_overlays(frame: &mut Frame, area: Rect, state: &mut UiState) {
-        // Help screen
-        if state.mode == InputMode::Help {
-            frame.render_widget(HelpScreen::new(state.help_state), area);
-            return;
-        }
-
-        // Tags screen
-        if state.mode == InputMode::Tags {
-            TagsPopup::new(state.tags_state).render(frame.area(), frame.buffer_mut());
-        }
-
-        // Logs screen
-        if state.mode == InputMode::Logs {
-            LogsScreen::new(state.logs_state).render(frame.area(), frame.buffer_mut());
-        }
-
-        // Confirm dialog
-        if state.mode == InputMode::Confirm {
-            if let Some(msg) = state.confirm_message {
-                let dialog = ConfirmDialog::new(" Confirm ", msg);
-                frame.render_widget(dialog, area);
-            }
-            return;
-        }
-
-        // Password dialog
-        if let Some(ref prompt) = state.password_prompt {
-            let mut dialog = PasswordDialog::new(prompt.title, prompt.prompt, prompt.value, prompt.cursor);
-            if let Some(err) = prompt.error {
-                dialog = dialog.error(err);
-            }
-            frame.render_widget(dialog, area);
-        }
-    }
-
     pub fn hex_color(rgb: u32) -> Color {
         Color::Rgb(
             ((rgb >> 16) & 0xFF) as u8,
@@ -203,4 +60,173 @@ impl Renderer {
             (rgb & 0xFF) as u8,
         )
     }
+
+    pub fn render(frame: &mut Frame, state: &mut UiState) {
+        let size = frame.area();
+        let chunks = create_main_layout(size);
+
+        render_content(frame, chunks[0], state);
+        render_status_line(frame, chunks[1], state);
+        render_help_bar(frame, chunks[2], state.mode);
+        render_overlays(frame, size, state);
+    }
+}
+
+fn create_main_layout(size: Rect) -> std::rc::Rc<[Rect]> {
+    Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(3),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(size)
+}
+
+fn render_content(frame: &mut Frame, area: Rect, state: &mut UiState) {
+    match state.view {
+        View::List => render_list(frame, area, state),
+        View::Detail => render_detail(frame, area, state),
+        View::Form => render_form(frame, area, state),
+    }
+}
+
+fn render_status_line(frame: &mut Frame, area: Rect, state: &UiState) {
+    let mut status = StatusLine::new(state.mode);
+
+    if let Some(buffer) = state.command_buffer {
+        status = status.command_buffer(buffer);
+    } else if let Some((msg, msg_type)) = state.message {
+        status = status.message(msg, msg_type);
+    }
+
+    if let Some(selected) = state.list_state.selected() {
+        status = status.item_count(selected, state.list_state.total);
+    }
+
+    frame.render_widget(status, area);
+}
+
+fn render_help_bar(frame: &mut Frame, area: Rect, mode: InputMode) {
+    let help_bar = HelpBar::for_mode(mode);
+    frame.render_widget(help_bar, area);
+}
+
+fn render_list(frame: &mut Frame, area: Rect, state: &mut UiState) {
+    if state.credentials.is_empty() {
+        let empty = EmptyState::new("No credentials").hint("Press 'n' to add one");
+        frame.render_widget(empty, area);
+        return;
+    }
+
+    let block = create_credentials_block(Color::Magenta);
+    let list = CredentialList::new(state.credentials).block(block);
+    frame.render_stateful_widget(list, area, state.list_state);
+}
+
+fn render_detail(frame: &mut Frame, area: Rect, state: &mut UiState) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(area);
+
+    render_detail_list(frame, chunks[0], state);
+    render_detail_panel(frame, chunks[1], state.selected_detail);
+}
+
+fn render_detail_list(frame: &mut Frame, area: Rect, state: &mut UiState) {
+    let block = create_credentials_block(Color::DarkGray);
+    let list = CredentialList::new(state.credentials).block(block);
+    frame.render_stateful_widget(list, area, state.list_state);
+}
+
+fn render_detail_panel(frame: &mut Frame, area: Rect, detail: Option<&CredentialDetail>) {
+    match detail {
+        Some(d) => frame.render_widget(DetailView::new(d), area),
+        None => frame.render_widget(EmptyState::new("Select a credential"), area),
+    }
+}
+
+fn create_credentials_block(border_color: Color) -> Block<'static> {
+    Block::default()
+        .title(" Credentials ")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(border_color))
+}
+
+fn render_form(frame: &mut Frame, area: Rect, state: &UiState) {
+    match state.credential_form {
+        Some(form) => frame.render_widget(CredentialFormWidget::new(form), area),
+        None => frame.render_widget(create_fallback_form_block(), area),
+    }
+}
+
+fn create_fallback_form_block() -> Block<'static> {
+    Block::default()
+        .title(" Form ")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Green))
+}
+
+fn render_overlays(frame: &mut Frame, area: Rect, state: &UiState) {
+    if render_help_overlay(frame, area, state) {
+        return;
+    }
+
+    render_tags_overlay(frame, state);
+    render_logs_overlay(frame, state);
+
+    if render_confirm_overlay(frame, area, state) {
+        return;
+    }
+
+    render_password_overlay(frame, area, state);
+}
+
+fn render_help_overlay(frame: &mut Frame, area: Rect, state: &UiState) -> bool {
+    if state.mode != InputMode::Help {
+        return false;
+    }
+    frame.render_widget(HelpScreen::new(state.help_state), area);
+    true
+}
+
+fn render_tags_overlay(frame: &mut Frame, state: &UiState) {
+    if state.mode != InputMode::Tags {
+        return;
+    }
+    TagsPopup::new(state.tags_state).render(frame.area(), frame.buffer_mut());
+}
+
+fn render_logs_overlay(frame: &mut Frame, state: &UiState) {
+    if state.mode != InputMode::Logs {
+        return;
+    }
+    LogsScreen::new(state.logs_state).render(frame.area(), frame.buffer_mut());
+}
+
+fn render_confirm_overlay(frame: &mut Frame, area: Rect, state: &UiState) -> bool {
+    if state.mode != InputMode::Confirm {
+        return false;
+    }
+    if let Some(msg) = state.confirm_message {
+        let dialog = ConfirmDialog::new(" Confirm ", msg);
+        frame.render_widget(dialog, area);
+    }
+    true
+}
+
+fn render_password_overlay(frame: &mut Frame, area: Rect, state: &UiState) {
+    let prompt = match &state.password_prompt {
+        Some(p) => p,
+        None => return,
+    };
+
+    let mut dialog = PasswordDialog::new(prompt.title, prompt.prompt, prompt.value, prompt.cursor);
+    if let Some(err) = prompt.error {
+        dialog = dialog.error(err);
+    }
+    frame.render_widget(dialog, area);
 }

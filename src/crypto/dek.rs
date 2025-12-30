@@ -57,30 +57,9 @@ impl DataEncryptionKey {
     /// Unwrap (decrypt) a DEK using the master key
     pub fn unwrap(wrapped_dek: &str, master_key: &MasterKey) -> CryptoResult<Self> {
         let mut dek_bytes = decrypt_bytes(master_key.as_ref(), &wrapped_dek.to_string())?;
-
-        if dek_bytes.len() != 32 {
-            // Zeroize before returning error
-            dek_bytes.zeroize();
-            return Err(CryptoError::DecryptionFailed(format!(
-                "Invalid DEK length: expected 32, got {}",
-                dek_bytes.len()
-            )));
-        }
-
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&dek_bytes);
-
-        // Zeroize the temporary Vec
+        let result = build_dek_from_bytes(&dek_bytes);
         dek_bytes.zeroize();
-
-        let dek = Self {
-            key: LockedBuffer::new(key),
-        };
-
-        // Zeroize the temporary array
-        key.zeroize();
-
-        Ok(dek)
+        result
     }
 
     /// Re-wrap the DEK with a new master key
@@ -101,6 +80,20 @@ impl std::fmt::Debug for DataEncryptionKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataEncryptionKey").finish_non_exhaustive()
     }
+}
+
+fn build_dek_from_bytes(bytes: &[u8]) -> CryptoResult<DataEncryptionKey> {
+    if bytes.len() != 32 {
+        return Err(CryptoError::DecryptionFailed(format!(
+            "Invalid DEK length: expected 32, got {}",
+            bytes.len()
+        )));
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(bytes);
+    let dek = DataEncryptionKey { key: LockedBuffer::new(key) };
+    key.zeroize();
+    Ok(dek)
 }
 
 #[cfg(test)]

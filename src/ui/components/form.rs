@@ -13,7 +13,6 @@ use ratatui::{
 use crate::db::models::CredentialType;
 use crate::ui::renderer::View;
 
-/// Form field definition
 #[derive(Debug, Clone)]
 pub struct FormField {
     pub label: &'static str,
@@ -78,7 +77,6 @@ impl FormField {
     }
 }
 
-/// Credential form state
 #[derive(Debug, Clone)]
 pub struct CredentialForm {
     pub fields: Vec<FormField>,
@@ -97,18 +95,57 @@ impl Default for CredentialForm {
     }
 }
 
+fn default_fields() -> Vec<FormField> {
+    vec![
+        FormField::text("Name", true),
+        FormField::select("Type").with_value(CredentialType::Password.display_name()),
+        FormField::text("Username", false),
+        FormField::password("Password/Secret", true),
+        FormField::text("URL", false),
+        FormField::text("Tags (multiple)", false),
+        FormField::multiline("Notes"),
+    ]
+}
+
+fn cycle_type_forward(cred_type: CredentialType) -> CredentialType {
+    match cred_type {
+        CredentialType::Password => CredentialType::ApiKey,
+        CredentialType::ApiKey => CredentialType::SshKey,
+        CredentialType::SshKey => CredentialType::Certificate,
+        CredentialType::Certificate => CredentialType::Totp,
+        CredentialType::Totp => CredentialType::Note,
+        CredentialType::Note => CredentialType::Database,
+        CredentialType::Database => CredentialType::Custom,
+        CredentialType::Custom => CredentialType::Password,
+    }
+}
+
+fn cycle_type_backward(cred_type: CredentialType) -> CredentialType {
+    match cred_type {
+        CredentialType::Password => CredentialType::Custom,
+        CredentialType::ApiKey => CredentialType::Password,
+        CredentialType::SshKey => CredentialType::ApiKey,
+        CredentialType::Certificate => CredentialType::SshKey,
+        CredentialType::Totp => CredentialType::Certificate,
+        CredentialType::Note => CredentialType::Totp,
+        CredentialType::Database => CredentialType::Note,
+        CredentialType::Custom => CredentialType::Database,
+    }
+}
+
+fn trim_to_option(val: &str) -> Option<String> {
+    let trimmed = val.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 impl CredentialForm {
     pub fn new() -> Self {
         Self {
-            fields: vec![
-                FormField::text("Name", true),
-                FormField::select("Type").with_value(CredentialType::Password.display_name()),
-                FormField::text("Username", false),
-                FormField::password("Password/Secret", true),
-                FormField::text("URL", false),
-                FormField::text("Tags (multiple)", false),
-                FormField::multiline("Notes"),
-            ],
+            fields: default_fields(),
             active_field: 0,
             cursor: 0,
             credential_type: CredentialType::Password,
@@ -161,7 +198,9 @@ impl CredentialForm {
     fn ensure_visible(&mut self, visible_fields: usize) {
         if self.active_field < self.scroll_offset {
             self.scroll_offset = self.active_field;
-        } else if self.active_field >= self.scroll_offset + visible_fields {
+            return;
+        }
+        if self.active_field >= self.scroll_offset + visible_fields {
             self.scroll_offset = self.active_field - visible_fields + 1;
         }
     }
@@ -184,18 +223,20 @@ impl CredentialForm {
 
     pub fn insert_char(&mut self, c: char) {
         let field = &mut self.fields[self.active_field];
-        if field.field_type != FieldType::Select {
-            field.value.insert(self.cursor, c);
-            self.cursor += 1;
+        if field.field_type == FieldType::Select {
+            return;
         }
+        field.value.insert(self.cursor, c);
+        self.cursor += 1;
     }
 
     pub fn delete_char(&mut self) {
         let field = &mut self.fields[self.active_field];
-        if self.cursor > 0 && field.field_type != FieldType::Select {
-            self.cursor -= 1;
-            field.value.remove(self.cursor);
+        if self.cursor == 0 || field.field_type == FieldType::Select {
+            return;
         }
+        self.cursor -= 1;
+        field.value.remove(self.cursor);
     }
 
     pub fn cursor_left(&mut self) {
@@ -211,32 +252,15 @@ impl CredentialForm {
     }
 
     pub fn cycle_type(&mut self, forward: bool) {
-        if self.fields[self.active_field].field_type == FieldType::Select {
-            self.credential_type = if forward {
-                match self.credential_type {
-                    CredentialType::Password => CredentialType::ApiKey,
-                    CredentialType::ApiKey => CredentialType::SshKey,
-                    CredentialType::SshKey => CredentialType::Certificate,
-                    CredentialType::Certificate => CredentialType::Totp,
-                    CredentialType::Totp => CredentialType::Note,
-                    CredentialType::Note => CredentialType::Database,
-                    CredentialType::Database => CredentialType::Custom,
-                    CredentialType::Custom => CredentialType::Password,
-                }
-            } else {
-                match self.credential_type {
-                    CredentialType::Password => CredentialType::Custom,
-                    CredentialType::ApiKey => CredentialType::Password,
-                    CredentialType::SshKey => CredentialType::ApiKey,
-                    CredentialType::Certificate => CredentialType::SshKey,
-                    CredentialType::Totp => CredentialType::Certificate,
-                    CredentialType::Note => CredentialType::Totp,
-                    CredentialType::Database => CredentialType::Note,
-                    CredentialType::Custom => CredentialType::Database,
-                }
-            };
-            self.fields[1].value = self.credential_type.display_name().to_string();
+        if self.fields[self.active_field].field_type != FieldType::Select {
+            return;
         }
+        self.credential_type = if forward {
+            cycle_type_forward(self.credential_type)
+        } else {
+            cycle_type_backward(self.credential_type)
+        };
+        self.fields[1].value = self.credential_type.display_name().to_string();
     }
 
     pub fn toggle_password_visibility(&mut self) {
@@ -245,9 +269,8 @@ impl CredentialForm {
 
     pub fn validate(&self) -> Result<(), String> {
         for field in &self.fields {
-            if field.required && field.value.trim().is_empty() {
-                return Err(format!("{} is required", field.label));
-            }
+            let is_empty_required = field.required && field.value.trim().is_empty();
+            if is_empty_required { return Err(format!("{} is required", field.label)); }
         }
         Ok(())
     }
@@ -257,8 +280,7 @@ impl CredentialForm {
     }
 
     pub fn get_username(&self) -> Option<String> {
-        let val = self.fields[2].value.trim();
-        if val.is_empty() { None } else { Some(val.to_string()) }
+        trim_to_option(&self.fields[2].value)
     }
 
     pub fn get_secret(&self) -> &str {
@@ -266,8 +288,7 @@ impl CredentialForm {
     }
 
     pub fn get_url(&self) -> Option<String> {
-        let val = self.fields[4].value.trim();
-        if val.is_empty() { None } else { Some(val.to_string()) }
+        trim_to_option(&self.fields[4].value)
     }
 
     pub fn get_tags(&self) -> Vec<String> {
@@ -280,12 +301,10 @@ impl CredentialForm {
     }
 
     pub fn get_notes(&self) -> Option<String> {
-        let val = self.fields[6].value.trim();
-        if val.is_empty() { None } else { Some(val.to_string()) }
+        trim_to_option(&self.fields[6].value)
     }
 }
 
-/// Credential form widget
 pub struct CredentialFormWidget<'a> {
     form: &'a CredentialForm,
     title: &'a str,
@@ -302,32 +321,181 @@ impl<'a> CredentialFormWidget<'a> {
     }
 }
 
+fn calculate_form_area(area: Rect) -> Rect {
+    let form_width = 70u16.min(area.width.saturating_sub(4));
+    let form_height = 20u16.min(area.height.saturating_sub(2));
+    let form_x = area.x + (area.width.saturating_sub(form_width)) / 2;
+    let form_y = area.y + (area.height.saturating_sub(form_height)) / 2;
+    Rect::new(form_x, form_y, form_width, form_height)
+}
+
+fn render_form_block(buf: &mut Buffer, form_area: Rect, title: &str) -> Rect {
+    Clear.render(form_area, buf);
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Magenta))
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(form_area);
+    block.render(form_area, buf);
+    inner
+}
+
+fn render_scroll_indicator(buf: &mut Buffer, inner: &Rect, at_top: bool) {
+    let (y, icon) = if at_top {
+        (inner.y, "")
+    } else {
+        (inner.y + inner.height - 2, "")
+    };
+    buf.set_string(inner.x + inner.width / 2, y, icon, Style::default().fg(Color::Magenta));
+}
+
+fn format_label(field: &FormField) -> String {
+    if field.required {
+        format!("{}*:", field.label)
+    } else {
+        format!("{}:", field.label)
+    }
+}
+
+fn label_style(is_active: bool) -> Style {
+    if is_active {
+        Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Gray)
+    }
+}
+
+fn field_background_style(is_active: bool) -> Style {
+    if is_active {
+        Style::default().bg(Color::DarkGray)
+    } else {
+        Style::default()
+    }
+}
+
+fn fill_field_background(buf: &mut Buffer, x: u16, y: u16, width: u16, style: Style) {
+    for cell_x in x..x + width {
+        if let Some(cell) = buf.cell_mut((cell_x, y)) {
+            cell.set_style(style);
+        }
+    }
+}
+
+struct DisplayValue {
+    text: String,
+    cursor: usize,
+}
+
+fn compute_select_display(form: &CredentialForm, field: &FormField) -> DisplayValue {
+    let icon = form.credential_type.icon();
+    DisplayValue {
+        text: format!("{} {}  [Space/Ctrl+Space]", icon, field.value),
+        cursor: 0,
+    }
+}
+
+fn compute_text_display(form: &CredentialForm, field: &FormField, value_width: usize) -> DisplayValue {
+    let text = if field.masked && !form.show_password {
+        "*".repeat(field.value.len())
+    } else {
+        field.value.clone()
+    };
+
+    let cursor_pos = form.cursor;
+    let scroll = if cursor_pos >= value_width.saturating_sub(1) {
+        cursor_pos.saturating_sub(value_width.saturating_sub(2))
+    } else {
+        0
+    };
+
+    let visible: String = text.chars().skip(scroll).take(value_width).collect();
+    let adjusted_cursor = cursor_pos.saturating_sub(scroll);
+
+    DisplayValue {
+        text: visible,
+        cursor: adjusted_cursor,
+    }
+}
+
+fn value_style(field: &FormField, is_active: bool) -> Style {
+    let bg = if is_active { Color::DarkGray } else { Color::Black };
+    let fg = match field.field_type {
+        FieldType::Select => Color::Yellow,
+        _ if field.masked => Color::Green,
+        _ => Color::White,
+    };
+    Style::default().fg(fg).bg(bg)
+}
+
+fn render_cursor(buf: &mut Buffer, x: u16, y: u16, max_x: u16) {
+    if x >= max_x {
+        return;
+    }
+    if let Some(cell) = buf.cell_mut((x, y)) {
+        cell.set_style(Style::default().bg(Color::White).fg(Color::Black));
+    }
+}
+
+fn render_field(
+    buf: &mut Buffer,
+    form: &CredentialForm,
+    field: &FormField,
+    field_idx: usize,
+    inner: &Rect,
+    y: u16,
+    label_width: u16,
+) {
+    let is_active = field_idx == form.active_field;
+
+    let label = format_label(field);
+    buf.set_string(inner.x, y, &label, label_style(is_active));
+
+    let value_x = inner.x + label_width;
+    let value_width = inner.width.saturating_sub(label_width + 1);
+
+    fill_field_background(buf, value_x, y, value_width, field_background_style(is_active));
+
+    let display = if field.field_type == FieldType::Select {
+        compute_select_display(form, field)
+    } else {
+        compute_text_display(form, field, value_width as usize)
+    };
+
+    buf.set_string(value_x, y, &display.text, value_style(field, is_active));
+
+    if is_active && field.field_type != FieldType::Select {
+        render_cursor(buf, value_x + display.cursor as u16, y, value_x + value_width);
+    }
+}
+
+fn render_help_text(buf: &mut Buffer, inner: &Rect) {
+    let help_y = inner.y + inner.height - 1;
+    let help_text = Line::from(vec![
+        Span::styled("Tab", Style::default().fg(Color::Magenta)),
+        Span::raw(" next  "),
+        Span::styled("Shift+Tab", Style::default().fg(Color::Magenta)),
+        Span::raw(" prev  "),
+        Span::styled("Enter", Style::default().fg(Color::Magenta)),
+        Span::raw(" save  "),
+        Span::styled("Esc", Style::default().fg(Color::Magenta)),
+        Span::raw(" cancel  "),
+        Span::styled("Ctrl+s", Style::default().fg(Color::Magenta)),
+        Span::raw(" show pwd"),
+    ]);
+    buf.set_line(inner.x, help_y, &help_text, inner.width);
+}
+
 impl<'a> Widget for CredentialFormWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // Center the form
-        let form_width = 70u16.min(area.width.saturating_sub(4));
-        let form_height = 20u16.min(area.height.saturating_sub(2));
-        let form_x = area.x + (area.width.saturating_sub(form_width)) / 2;
-        let form_y = area.y + (area.height.saturating_sub(form_height)) / 2;
-        let form_area = Rect::new(form_x, form_y, form_width, form_height);
+        let form_area = calculate_form_area(area);
+        let inner = render_form_block(buf, form_area, self.title);
 
-        // Clear background
-        Clear.render(form_area, buf);
-
-        // Draw border
-        let block = Block::default()
-            .title(self.title)
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::Magenta))
-            .style(Style::default().bg(Color::Black));
-
-        let inner = block.inner(form_area);
-        block.render(form_area, buf);
-
-        // Calculate field layout
         let label_width = 18u16;
-        let visible_height = inner.height.saturating_sub(1); // Reserve 1 line for help text
+        let visible_height = inner.height.saturating_sub(1);
         let max_visible_fields = (visible_height / 2) as usize;
 
         let needs_scrolling = self.form.fields.len() > max_visible_fields;
@@ -336,131 +504,20 @@ impl<'a> Widget for CredentialFormWidget<'a> {
         let has_up_indicator = needs_scrolling && scroll_offset > 0;
         let mut y = if has_up_indicator { inner.y + 1 } else { inner.y };
 
-        // Show scroll indicator at top if scrolled
         if has_up_indicator {
-            buf.set_string(
-                inner.x + inner.width / 2,
-                inner.y,
-                "",
-                Style::default().fg(Color::Magenta),
-            );
+            render_scroll_indicator(buf, &inner, true);
         }
 
         for (i, field) in self.form.fields.iter().enumerate().skip(scroll_offset) {
-            if i >= scroll_offset + max_visible_fields {
-                break;
-            }
-
-            let is_active = i == self.form.active_field;
-
-            // Label with required indicator
-            let label = if field.required {
-                format!("{}*:", field.label)
-            } else {
-                format!("{}:", field.label)
-            };
-
-            let label_style = if is_active {
-                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::Gray)
-            };
-
-            buf.set_string(inner.x, y, &label, label_style);
-
-            // Value field
-            let value_x = inner.x + label_width;
-            let value_width = inner.width.saturating_sub(label_width + 1);
-
-            // Field background
-            let field_style = if is_active {
-                Style::default().bg(Color::DarkGray)
-            } else {
-                Style::default()
-            };
-
-            for x in value_x..value_x + value_width {
-                if let Some(cell) = buf.cell_mut((x, y)) {
-                    cell.set_style(field_style);
-                }
-            }
-
-            // Field value with horizontal scrolling
-            let value_width_usize = value_width as usize;
-            let (display_value, display_cursor) = if field.field_type == FieldType::Select {
-                // Show type with icon
-                let icon = self.form.credential_type.icon();
-                (format!("{} {}  [Space/Ctrl+Space]", icon, field.value), 0)
-            } else {
-                // Calculate scroll offset to keep cursor visible
-                let text = if field.masked && !self.form.show_password {
-                    "*".repeat(field.value.len())
-                } else {
-                    field.value.clone()
-                };
-                
-                let cursor_pos = self.form.cursor;
-                // Determine scroll offset - keep cursor within visible area with some padding
-                let scroll = if cursor_pos >= value_width_usize.saturating_sub(1) {
-                    cursor_pos.saturating_sub(value_width_usize.saturating_sub(2))
-                } else {
-                    0
-                };
-                
-                // Extract visible portion of text
-                let visible: String = text.chars().skip(scroll).take(value_width_usize).collect();
-                let adjusted_cursor = cursor_pos.saturating_sub(scroll);
-                
-                (visible, adjusted_cursor)
-            };
-
-            let value_style = if field.field_type == FieldType::Select {
-                Style::default().fg(Color::Yellow)
-            } else if field.masked {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::White)
-            };
-
-            buf.set_string(value_x, y, &display_value, value_style.bg(if is_active { Color::DarkGray } else { Color::Black }));
-
-            // Cursor
-            if is_active && field.field_type != FieldType::Select {
-                let cursor_x = value_x + display_cursor as u16;
-                if cursor_x < value_x + value_width {
-                    if let Some(cell) = buf.cell_mut((cursor_x, y)) {
-                        cell.set_style(Style::default().bg(Color::White).fg(Color::Black));
-                    }
-                }
-            }
-
-            y += 2; // Space between fields
+            if i >= scroll_offset + max_visible_fields { break; }
+            render_field(buf, self.form, field, i, &inner, y, label_width);
+            y += 2;
         }
 
-        // Show scroll indicator at bottom if more fields below
         if needs_scrolling && scroll_offset + max_visible_fields < self.form.fields.len() {
-            buf.set_string(
-                inner.x + inner.width / 2,
-                inner.y + inner.height - 2,
-                "",
-                Style::default().fg(Color::Magenta),
-            );
+            render_scroll_indicator(buf, &inner, false);
         }
 
-        // Help text at bottom
-        let help_y = inner.y + inner.height - 1;
-        let help_text = Line::from(vec![
-            Span::styled("Tab", Style::default().fg(Color::Magenta)),
-            Span::raw(" next  "),
-            Span::styled("Shift+Tab", Style::default().fg(Color::Magenta)),
-            Span::raw(" prev  "),
-            Span::styled("Enter", Style::default().fg(Color::Magenta)),
-            Span::raw(" save  "),
-            Span::styled("Esc", Style::default().fg(Color::Magenta)),
-            Span::raw(" cancel  "),
-            Span::styled("Ctrl+s", Style::default().fg(Color::Magenta)),
-            Span::raw(" show pwd"),
-        ]);
-        buf.set_line(inner.x, help_y, &help_text, inner.width);
+        render_help_text(buf, &inner);
     }
 }

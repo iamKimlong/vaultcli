@@ -287,6 +287,12 @@ mod tests {
     }
 
     #[test]
+    fn test_normal_mode_j() {
+        let (action, _) = normal_mode_action(key(KeyCode::Char('j')), None);
+        assert_eq!(action, Action::MoveDown);
+    }
+
+    #[test]
     fn test_show_tags() {
         let (action, _) = normal_mode_action(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE), None);
         assert_eq!(action, Action::ShowTags);

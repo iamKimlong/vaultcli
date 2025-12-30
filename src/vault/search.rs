@@ -6,7 +6,6 @@ use crate::db::{self, Credential, CredentialType};
 
 use super::VaultResult;
 
-/// Search results with metadata
 #[derive(Debug, Clone)]
 pub struct SearchResults {
     pub credentials: Vec<Credential>,
@@ -29,32 +28,22 @@ impl SearchResults {
     }
 }
 
-/// Search credentials by text query
 pub fn search(conn: &rusqlite::Connection, query: &str) -> VaultResult<SearchResults> {
     let trimmed = query.trim();
-    let credentials = if trimmed.is_empty() {
-        db::get_all_credentials(conn)?
-    } else {
-        db::search_credentials(conn, trimmed)?
-    };
+    if trimmed.is_empty() {
+        let credentials = db::get_all_credentials(conn)?;
+        return Ok(SearchResults::new(credentials, None));
+    }
 
-    Ok(SearchResults::new(
-        credentials,
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        },
-    ))
+    let credentials = db::search_credentials(conn, trimmed)?;
+    Ok(SearchResults::new(credentials, Some(trimmed.to_string())))
 }
 
-/// Search credentials by tag
 pub fn search_by_tag(conn: &rusqlite::Connection, tag: &str) -> VaultResult<SearchResults> {
     let credentials = db::get_credentials_by_tag(conn, &[tag.to_string()])?;
     Ok(SearchResults::new(credentials, Some(format!("tag:{}", tag))))
 }
 
-/// Search credentials by type
 pub fn search_by_type(
     conn: &rusqlite::Connection,
     cred_type: CredentialType,
@@ -71,80 +60,102 @@ pub fn search_by_type(
     ))
 }
 
-/// Combined search with multiple criteria
+fn fetch_initial_credentials(
+    conn: &rusqlite::Connection,
+    query: Option<&str>,
+) -> VaultResult<Vec<Credential>> {
+    let Some(q) = query else {
+        return db::get_all_credentials(conn).map_err(Into::into);
+    };
+
+    let trimmed = q.trim();
+    if trimmed.is_empty() {
+        return db::get_all_credentials(conn).map_err(Into::into);
+    }
+
+    db::search_credentials(conn, trimmed).map_err(Into::into)
+}
+
+fn filter_by_tag(credentials: &mut Vec<Credential>, tag: &str) {
+    let tag_lower = tag.to_lowercase();
+    credentials.retain(|c| credential_has_tag(c, &tag_lower));
+}
+
+fn credential_has_tag(cred: &Credential, tag_lower: &str) -> bool {
+    cred.tags.iter().any(|ct| ct.to_lowercase().contains(tag_lower))
+}
+
+fn filter_by_type(credentials: &mut Vec<Credential>, cred_type: CredentialType) {
+    credentials.retain(|c| c.credential_type == cred_type);
+}
+
+fn build_query_string(
+    query: Option<&str>,
+    tag: Option<&str>,
+    cred_type: Option<CredentialType>,
+) -> Option<String> {
+    let mut parts = Vec::new();
+
+    if let Some(q) = query {
+        let trimmed = q.trim();
+        if !trimmed.is_empty() {
+            parts.push(trimmed.to_string());
+        }
+    }
+
+    if let Some(t) = tag {
+        parts.push(format!("tag:{}", t));
+    }
+
+    if let Some(ct) = cred_type {
+        parts.push(format!("type:{}", ct.as_str()));
+    }
+
+    if parts.is_empty() {
+        return None;
+    }
+
+    Some(parts.join(" "))
+}
+
 pub fn search_combined(
     conn: &rusqlite::Connection,
     query: Option<&str>,
     tag: Option<&str>,
     cred_type: Option<CredentialType>,
 ) -> VaultResult<SearchResults> {
-    // Start with all credentials or search results
-    let mut credentials = match query {
-        Some(q) if !q.trim().is_empty() => db::search_credentials(conn, q.trim())?,
-        _ => db::get_all_credentials(conn)?,
-    };
+    let mut credentials = fetch_initial_credentials(conn, query)?;
 
-    // Apply filters
     if let Some(t) = tag {
-        let tag_lower = t.to_lowercase();
-        credentials.retain(|c| c.tags.iter().any(|ct| ct.to_lowercase().contains(&tag_lower)));
+        filter_by_tag(&mut credentials, t);
     }
 
     if let Some(ct) = cred_type {
-        credentials.retain(|c| c.credential_type == ct);
+        filter_by_type(&mut credentials, ct);
     }
 
-    // Build query string for display
-    let mut query_parts = Vec::new();
-    if let Some(q) = query {
-        if !q.trim().is_empty() {
-            query_parts.push(q.trim().to_string());
-        }
-    }
-    if let Some(t) = tag {
-        query_parts.push(format!("tag:{}", t));
-    }
-    if let Some(ct) = cred_type {
-        query_parts.push(format!("type:{}", ct.as_str()));
-    }
-
-    let query_string = if query_parts.is_empty() {
-        None
-    } else {
-        Some(query_parts.join(" "))
-    };
-
+    let query_string = build_query_string(query, tag, cred_type);
     Ok(SearchResults::new(credentials, query_string))
 }
 
-/// Get recently accessed credentials
+fn compare_by_access_time(a: &Credential, b: &Credential) -> std::cmp::Ordering {
+    let a_time = a.accessed_at.unwrap_or(a.updated_at);
+    let b_time = b.accessed_at.unwrap_or(b.updated_at);
+    b_time.cmp(&a_time)
+}
+
 pub fn get_recent(conn: &rusqlite::Connection, limit: usize) -> VaultResult<SearchResults> {
     let mut all = db::get_all_credentials(conn)?;
-
-    // Sort by accessed_at (most recent first), then by updated_at
-    all.sort_by(|a, b| {
-        let a_time = a.accessed_at.unwrap_or(a.updated_at);
-        let b_time = b.accessed_at.unwrap_or(b.updated_at);
-        b_time.cmp(&a_time)
-    });
-
+    all.sort_by(compare_by_access_time);
     all.truncate(limit);
-
     Ok(SearchResults::new(all, Some("recent".to_string())))
 }
 
-/// Get all unique tags
 pub fn get_all_tags(conn: &rusqlite::Connection) -> VaultResult<Vec<String>> {
     let all = db::get_all_credentials(conn)?;
-
-    let mut tags: Vec<String> = all
-        .into_iter()
-        .flat_map(|c| c.tags)
-        .collect();
-
+    let mut tags: Vec<String> = all.into_iter().flat_map(|c| c.tags).collect();
     tags.sort();
     tags.dedup();
-
     Ok(tags)
 }
 
@@ -158,10 +169,15 @@ mod tests {
         MasterKey::from_bytes([0x42u8; 32])
     }
 
-    fn setup_test_data(conn: &rusqlite::Connection) {
+    fn create_test_credential(name: &str, ctype: CredentialType, tags: Vec<&str>) -> Credential {
         let key = test_key();
-        let blob = |s: &str| encrypt_string(key.as_ref(), s).unwrap();
+        let blob = encrypt_string(key.as_ref(), "secret").unwrap();
+        let mut cred = Credential::new(name.to_string(), ctype, blob);
+        cred.tags = tags.into_iter().map(|s| s.to_string()).collect();
+        cred
+    }
 
+    fn setup_test_data(conn: &rusqlite::Connection) {
         let creds = vec![
             ("AWS Prod", CredentialType::ApiKey, vec!["cloud", "prod"]),
             ("AWS Staging", CredentialType::ApiKey, vec!["cloud", "staging"]),
@@ -170,12 +186,7 @@ mod tests {
         ];
 
         for (name, ctype, tags) in creds {
-            let mut cred = Credential::new(
-                name.to_string(),
-                ctype,
-                blob("secret"),
-            );
-            cred.tags = tags.into_iter().map(|s| s.to_string()).collect();
+            let cred = create_test_credential(name, ctype, tags);
             db::create_credential(conn, &cred).unwrap();
         }
     }
@@ -212,13 +223,7 @@ mod tests {
         let db = Database::open_in_memory().unwrap();
         setup_test_data(db.conn());
 
-        let results = search_combined(
-            db.conn(),
-            Some("AWS"),
-            Some("prod"),
-            None,
-        )
-        .unwrap();
+        let results = search_combined(db.conn(), Some("AWS"), Some("prod"), None).unwrap();
         assert_eq!(results.total, 1);
         assert_eq!(results.credentials[0].name, "AWS Prod");
     }
