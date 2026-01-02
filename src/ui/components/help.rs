@@ -76,7 +76,7 @@ impl<'a> HelpScreen<'a> {
     }
 
     pub fn max_scroll(area: Rect) -> usize {
-        let visible = Self::visible_height(area) as usize;
+        let visible = Self::visible_height(area) as usize - 1; // Account for scroll indicator line
         let content = Self::content_height(area);
         content.saturating_sub(visible)
     }

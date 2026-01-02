@@ -153,7 +153,7 @@ impl<'a> LogsScreen<'a> {
 
     pub fn visible_height(area: Rect) -> u16 {
         let popup = centered_rect(85, 75, area);
-        popup.height.saturating_sub(4)
+        popup.height.saturating_sub(5) // -1 to account for indicator line
     }
 
     pub fn visible_width(area: Rect) -> u16 {
@@ -167,7 +167,7 @@ impl Widget for LogsScreen<'_> {
         let popup = centered_rect(85, 75, area);
         Clear.render(popup, buf);
 
-        let block = create_popup_block(" Audit Logs ", Color::Magenta);
+        let block = create_popup_block(" Audit Logs (last 500) ", Color::Magenta);
         let inner = block.inner(popup);
         block.render(popup, buf);
 
