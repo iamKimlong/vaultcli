@@ -315,7 +315,7 @@ fn action_display(action: &AuditAction) -> (&'static str, Color) {
         AuditAction::Copy => ("COPY", Color::Magenta),
         AuditAction::Export => ("EXPORT", Color::Cyan),
         AuditAction::Import => ("IMPORT", Color::Cyan),
-        AuditAction::Unlock => ("UNLOCK", Color::Green),
+        AuditAction::Unlock => ("UNLOCK", Color::Cyan),
         AuditAction::Lock => ("LOCK", Color::Yellow),
         AuditAction::FailedUnlock => ("FAILED", Color::Red),
     }
